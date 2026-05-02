@@ -198,3 +198,14 @@ Echo.private(`workflow.${workflowRunId}`)
         console.error(`Step ${e.step_id} failed:`, e.error_message);
     });
 ```
+
+---
+
+##  Deployment Checklist
+
+Before moving to production, ensure the following:
+- [ ] Redis is configured as the `QUEUE_CONNECTION` and `CACHE_DRIVER`.
+- [ ] Database credentials and `tenant_id` scopes are securely managed.
+- [ ] Supervisor (or similar process monitor) is configured to keep `php artisan queue:work` running.
+- [ ] A proper WebSocket server (Pusher/Reverb/Soketi) is deployed and configured in `.env` for real-time features.
+- [ ] Horizon is installed (optional but recommended) to monitor Redis queues visually.
