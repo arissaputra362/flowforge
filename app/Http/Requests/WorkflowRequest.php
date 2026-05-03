@@ -17,15 +17,11 @@ class WorkflowRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'tenant_id' => ['required', 'uuid', Rule::exists('tenants', 'id')],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'definition' => ['required', 'array'],
-            'definition.steps' => ['required', 'array', 'min:1'],
-            'definition.steps.*.id' => ['required', 'string', 'max:255'],
-            'definition.steps.*.type' => ['required', 'string', 'max:255'],
-            'definition.steps.*.depends_on' => ['sometimes', 'array'],
-            'definition.steps.*.depends_on.*' => ['string', 'max:255'],
+            'trigger_type' => 'required|string',
+            'cron_expression' => 'nullable|string',
+            'definition' => ['required'],
         ];
     }
 

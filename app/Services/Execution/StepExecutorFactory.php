@@ -17,6 +17,8 @@ class StepExecutorFactory
             'http' => HttpStepExecutor::execute($stepDefinition, $input),
             'delay' => DelayStepExecutor::execute($stepDefinition, $input),
             'throw' => ThrowingStepExecutor::execute($stepDefinition, $input),
+            'condition' => ConditionStepExecutor::execute($stepDefinition, $input),
+            'script'    => ScriptStepExecutor::execute($stepDefinition, $input),
             default => throw new \RuntimeException("Unsupported step type: {$type}"),
         };
     }

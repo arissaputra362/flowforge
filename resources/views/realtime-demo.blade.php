@@ -17,7 +17,7 @@
         </div>
     </main>
 
-    <script>
+    <script type="module">
         const runId = @json($runId);
         const eventsEl = document.getElementById('events');
 

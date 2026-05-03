@@ -6,6 +6,8 @@ services:
     container_name: flowforge-app
     restart: unless-stopped
     working_dir: /var/www/html
+    ports:
+      - "8081:8080"
     volumes:
       - .:/var/www/html
       - vendor:/var/www/html/vendor

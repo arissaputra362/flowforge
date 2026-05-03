@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Models\Workflow;
 use App\Services\Workflow\DagParser;
 use App\Repositories\WorkflowRepository;
+use Exception;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class WorkflowService
 {
@@ -21,19 +23,24 @@ class WorkflowService
         return $this->workflowRepository->paginate($tenantId, $perPage);
     }
 
+    public function baseQuery(?string $tenantId){
+        return $this->workflowRepository->query($tenantId);
+    }
+
     public function findOrFail(string $workflowId, ?string $tenantId = null): Workflow
     {
         return $this->workflowRepository->findOrFail($workflowId, $tenantId);
     }
 
-    public function create(array $data): Workflow
+    public function create($user, array $data): Workflow
     {
-        return DB::transaction(function () use ($data): Workflow {
-            $definition = $this->dagParser->validate($data['definition']);
+        return DB::transaction(function () use ($user, $data): Workflow {
+            $dag = json_decode($data['definition'], true);
+            $definition = $this->dagParser->validate($dag);
 
             return $this->workflowRepository->create(
                 [
-                    'tenant_id' => $data['tenant_id'],
+                    'tenant_id' => $user->tenant_id,
                     'name' => $data['name'],
                     'description' => $data['description'] ?? null,
                 ],
@@ -59,4 +66,6 @@ class WorkflowService
             );
         });
     }
+
+
 }

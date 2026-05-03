@@ -16,12 +16,24 @@ class WorkflowRepository
         $paginator = Workflow::query()
             ->when($tenantId, fn ($query) => $query->where('tenant_id', $tenantId))
             ->with(['versions'])
+            ->withCount('runs')
             ->orderByDesc('created_at')
             ->paginate($perPage);
 
         $paginator->getCollection()->transform(fn (Workflow $workflow) => $this->attachLatestVersion($workflow));
 
         return $paginator;
+    }
+
+    public function query(?string $tenantId = null)
+    {
+        $query = Workflow::query()->with(['tenant', 'latestVersion']);
+
+        if ($tenantId !== null) {
+            $query->where('tenant_id', $tenantId);
+        }
+
+        return $query;
     }
 
     public function findOrFail(string $workflowId, ?string $tenantId = null): Workflow

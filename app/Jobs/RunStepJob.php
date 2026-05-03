@@ -2,9 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Models\StepRun;
-use App\Models\StepRun as StepRunModel;
-use App\Services\Execution\StepExecutorFactory;
 use App\Services\ExecutionService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -12,7 +9,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 
 class RunStepJob implements ShouldQueue
 {
@@ -20,29 +16,51 @@ class RunStepJob implements ShouldQueue
 
     public string $stepRunId;
     public int $tries = 3;
-
-    public function backoff(): array
-    {
-        return [5, 10, 20];
-    }
+    public int $timeout = 300; // 5 menit
 
     public function __construct(string $stepRunId)
     {
         $this->stepRunId = $stepRunId;
     }
 
-    public function handle(ExecutionService $executionService)
+    /**
+     * Exponential backoff: 2^attempt detik.
+     * attempt 1 → 2s, attempt 2 → 4s, attempt 3 → 8s
+     */
+    public function backoff(): array
     {
-        // Lock and delegate step execution to ExecutionService
+        return array_map(
+            fn(int $attempt) => pow(2, $attempt),
+            range(1, $this->tries)
+        );
+        // → [2, 4, 8]
+    }
+
+    public function handle(ExecutionService $executionService): void
+    {
         $lockKey = "step_run_{$this->stepRunId}";
 
-        Cache::lock($lockKey, 30)->get(function () use ($executionService) {
+        $acquired = Cache::lock($lockKey, 60)->get(function () use ($executionService) {
             try {
-                $executionService->executeStepRun($this->stepRunId);
+                $executionService->executeStepAttempt(
+                    $this->stepRunId,
+                    $this->tries  // ✅ satu sumber kebenaran
+                );
             } catch (\RuntimeException $e) {
-                // dependency not ready; release for retry
-                $this->release(5);
+                if (str_contains($e->getMessage(), 'Unfinished dependencies')) {
+                    // Dependency belum siap — release untuk retry
+                    $this->release(5);
+                    return;
+                }
+
+                // Exception retryable lain — rethrow supaya queue backoff jalan
+                throw $e;
             }
         });
+
+        // Lock tidak bisa didapat → worker lain sedang eksekusi step ini
+        if ($acquired === null) {
+            $this->release(5);
+        }
     }
 }
