@@ -25,6 +25,11 @@ class UserService
         return $this->userRepository->query($tenantId);
     }
 
+    public function paginateWithFilters(?string $tenantId, array $filters)
+    {
+        return $this->userRepository->paginateWithFilters($tenantId, $filters);
+    }
+
     public function create(array $data)
     {
         DB::beginTransaction();

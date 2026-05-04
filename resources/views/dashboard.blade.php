@@ -6,11 +6,11 @@
 @section('page_subtitle', 'Operational overview of workflows, runs, and execution health.')
 
 @section('header_actions')
-    <a href="/workflows"
+    <a href="{{ route('webworkflows.index') }}"
         class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 text-sm font-medium transition">
         View Workflows
     </a>
-    <a href="/workflows/create"
+    <a href="{{ route('webworkflows.create') }}"
         class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition">
         + New Workflow
     </a>
@@ -71,7 +71,7 @@
             width: 80px;
             height: 80px;
             border-radius: 999px;
-            background: radial-gradient(circle, rgba(255,255,255,.08), transparent 70%);
+            background: radial-gradient(circle, rgba(255, 255, 255, .08), transparent 70%);
         }
 
         .metric-label,
@@ -109,8 +109,8 @@
             border-radius: 999px;
             font-size: .75rem;
             font-weight: 600;
-            border: 1px solid rgba(255,255,255,.08);
-            background: rgba(255,255,255,.04);
+            border: 1px solid rgba(255, 255, 255, .08);
+            background: rgba(255, 255, 255, .04);
         }
 
         .status-dot {
@@ -122,11 +122,11 @@
         .trend-bar {
             height: 8px;
             border-radius: 999px;
-            background: rgba(255,255,255,.06);
+            background: rgba(255, 255, 255, .06);
             overflow: hidden;
         }
 
-        .trend-bar > span {
+        .trend-bar>span {
             display: block;
             height: 100%;
             border-radius: inherit;
@@ -141,14 +141,14 @@
         .workflow-mini span {
             padding: 6px 10px;
             border-radius: 999px;
-            background: rgba(255,255,255,.04);
-            border: 1px solid rgba(255,255,255,.08);
+            background: rgba(255, 255, 255, .04);
+            border: 1px solid rgba(255, 255, 255, .08);
             font-size: .75rem;
             color: #cbd5e1;
         }
 
         .table-row {
-            border-bottom: 1px solid rgba(255,255,255,.06);
+            border-bottom: 1px solid rgba(255, 255, 255, .06);
         }
 
         .table-row:last-child {
@@ -161,7 +161,7 @@
             gap: 12px;
             align-items: start;
             padding: 12px 0;
-            border-bottom: 1px solid rgba(255,255,255,.06);
+            border-bottom: 1px solid rgba(255, 255, 255, .06);
         }
 
         .activity-item:last-child {
@@ -188,14 +188,16 @@
     @endphp
 
     <div class="dashboard-shell fade-in space-y-8">
-        <div class="glass p-6 lg:p-8 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between relative overflow-hidden">
+        <div
+            class="glass p-6 lg:p-8 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between relative overflow-hidden">
             <div class="max-w-3xl">
                 <div class="section-kicker mb-3">Tenant workspace</div>
                 <h2 class="text-white font-black text-3xl lg:text-5xl leading-tight">
                     {{ $tenant->name ?? 'FlowForge Dashboard' }}
                 </h2>
                 <p class="text-slate-400 mt-4 max-w-2xl leading-7">
-                    Real-time operational overview for workflows, workflow runs, execution logs, and recent failure patterns.
+                    Real-time operational overview for workflows, workflow runs, execution logs, and recent failure
+                    patterns.
                 </p>
 
                 <div class="flex flex-wrap gap-3 mt-5">
@@ -222,7 +224,8 @@
                 </div>
                 <div class="panel-card p-4">
                     <div class="section-kicker">Workflows</div>
-                    <div class="text-white text-2xl font-bold mt-2">{{ $tenant->workflows_count ?? $summary['workflows_total'] }}</div>
+                    <div class="text-white text-2xl font-bold mt-2">
+                        {{ $tenant->workflows_count ?? $summary['workflows_total'] }}</div>
                     <div class="text-slate-500 text-sm mt-1">Versioned definitions</div>
                 </div>
             </div>
@@ -271,7 +274,8 @@
                             <span class="badge badge-completed">{{ $summary['completed_runs'] }} completed</span>
                         </div>
                         <div class="trend-bar mt-4">
-                            <span class="bg-linear-to-r from-emerald-400 via-cyan-400 to-indigo-500" style="width: {{ $summary['success_rate'] }}%"></span>
+                            <span class="bg-linear-to-r from-emerald-400 via-cyan-400 to-indigo-500"
+                                style="width: {{ $summary['success_rate'] }}%"></span>
                         </div>
                     </div>
 
@@ -284,7 +288,8 @@
                             <span class="badge badge-failed">{{ $summary['failed_runs'] }} failed</span>
                         </div>
                         <div class="trend-bar mt-4">
-                            <span class="bg-linear-to-r from-rose-400 to-amber-400" style="width: {{ max(8, $summary['failure_rate']) }}%"></span>
+                            <span class="bg-linear-to-r from-rose-400 to-amber-400"
+                                style="width: {{ max(8, $summary['failure_rate']) }}%"></span>
                         </div>
                     </div>
                 </div>
@@ -312,20 +317,22 @@
                 <div class="section-kicker mb-2">Failure hotspots</div>
                 <h3 class="glass-title text-xl">Steps needing attention</h3>
 
-                @if($failureHotspots->isEmpty())
-                    <div class="mt-6 rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-slate-500 text-sm">
+                @if ($failureHotspots->isEmpty())
+                    <div
+                        class="mt-6 rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-slate-500 text-sm">
                         No failed steps in this tenant yet.
                     </div>
                 @else
                     <div class="space-y-4 mt-5">
-                        @foreach($failureHotspots as $hotspot)
+                        @foreach ($failureHotspots as $hotspot)
                             <div>
                                 <div class="flex items-center justify-between gap-3 mb-2">
                                     <div class="text-white text-sm font-medium truncate">{{ $hotspot->step_id }}</div>
                                     <div class="text-slate-400 text-xs">{{ $hotspot->failures }} failures</div>
                                 </div>
                                 <div class="trend-bar">
-                                    <span class="bg-linear-to-r from-rose-400 to-orange-400" style="width: {{ min(100, $hotspot->failures * 20) }}%"></span>
+                                    <span class="bg-linear-to-r from-rose-400 to-orange-400"
+                                        style="width: {{ min(100, $hotspot->failures * 20) }}%"></span>
                                 </div>
                             </div>
                         @endforeach
@@ -335,7 +342,8 @@
                 <div class="mt-6 rounded-2xl border border-white/8 bg-white/2 p-4">
                     <div class="section-kicker mb-2">Tenant context</div>
                     <div class="text-white font-semibold">{{ $tenant->name ?? 'No tenant loaded' }}</div>
-                    <div class="text-slate-500 text-sm mt-1">{{ $tenant->users_count ?? 0 }} users, {{ $tenant->workflows_count ?? 0 }} workflows</div>
+                    <div class="text-slate-500 text-sm mt-1">{{ $tenant->users_count ?? 0 }} users,
+                        {{ $tenant->workflows_count ?? 0 }} workflows</div>
                 </div>
             </div>
         </div>
@@ -350,22 +358,28 @@
                     <span class="text-xs text-slate-500">Latest 6 runs</span>
                 </div>
 
-                @if($recentRuns->isEmpty())
+                @if ($recentRuns->isEmpty())
                     <div class="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-slate-500 text-sm">
                         No workflow runs available yet.
                     </div>
                 @else
                     <div class="space-y-3">
-                        @foreach($recentRuns as $run)
+                        @foreach ($recentRuns as $run)
                             @php
                                 $styles = $statusStyles[$run->status] ?? $statusStyles['pending'];
-                                $durationSeconds = ($run->updated_at && $run->created_at)
-                                    ? $run->updated_at->diffInSeconds($run->created_at)
-                                    : 0;
-                                $durationLabel = $durationSeconds < 60
-                                    ? $durationSeconds . 's'
-                                    : (int) floor($durationSeconds / 60) . 'm ' . str_pad((string) ($durationSeconds % 60), 2, '0', STR_PAD_LEFT) . 's';
-                                $progress = $run->total_steps > 0 ? round(($run->finished_steps / $run->total_steps) * 100) : 0;
+                                $durationSeconds =
+                                    $run->updated_at && $run->created_at
+                                        ? $run->updated_at->diffInSeconds($run->created_at)
+                                        : 0;
+                                $durationLabel =
+                                    $durationSeconds < 60
+                                        ? $durationSeconds . 's'
+                                        : (int) floor($durationSeconds / 60) .
+                                            'm ' .
+                                            str_pad((string) ($durationSeconds % 60), 2, '0', STR_PAD_LEFT) .
+                                            's';
+                                $progress =
+                                    $run->total_steps > 0 ? round(($run->finished_steps / $run->total_steps) * 100) : 0;
                             @endphp
 
                             <div class="flow-card p-4">
@@ -376,11 +390,14 @@
                                                 <span class="status-dot {{ $styles['dot'] }}"></span>
                                                 {{ $run->status }}
                                             </span>
-                                            <span class="text-xs text-slate-500">v{{ $run->workflowVersion->version ?? '—' }}</span>
+                                            <span
+                                                class="text-xs text-slate-500">v{{ $run->workflowVersion->version ?? '—' }}</span>
                                         </div>
-                                        <div class="text-white font-semibold mt-3 truncate">{{ $run->workflow->name ?? 'Untitled workflow' }}</div>
+                                        <div class="text-white font-semibold mt-3 truncate">
+                                            {{ $run->workflow->name ?? 'Untitled workflow' }}</div>
                                         <div class="text-slate-500 text-sm mt-1">
-                                            Started {{ $run->created_at->diffForHumans() }} · Duration {{ $durationLabel }}
+                                            Started {{ $run->created_at->diffForHumans() }} · Duration
+                                            {{ $durationLabel }}
                                         </div>
                                     </div>
 
@@ -390,11 +407,13 @@
                                             <span>{{ $run->finished_steps }} / {{ $run->total_steps }}</span>
                                         </div>
                                         <div class="trend-bar">
-                                            <span class="bg-linear-to-r from-indigo-400 via-cyan-400 to-emerald-400" style="width: {{ $progress }}%"></span>
+                                            <span class="bg-linear-to-r from-indigo-400 via-cyan-400 to-emerald-400"
+                                                style="width: {{ $progress }}%"></span>
                                         </div>
                                     </div>
 
-                                    <a href="/runs/{{ $run->id }}" class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-200 text-sm hover:bg-white/10 transition whitespace-nowrap">
+                                    <a href="/runs/{{ $run->id }}"
+                                        class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-200 text-sm hover:bg-white/10 transition whitespace-nowrap">
                                         Open run
                                     </a>
                                 </div>
@@ -408,22 +427,24 @@
                 <div class="section-kicker mb-2">Recent logs</div>
                 <h3 class="glass-title text-xl">Execution activity</h3>
 
-                @if($recentLogs->isEmpty())
-                    <div class="mt-6 rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-slate-500 text-sm">
+                @if ($recentLogs->isEmpty())
+                    <div
+                        class="mt-6 rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-slate-500 text-sm">
                         No logs captured yet.
                     </div>
                 @else
                     <div class="mt-5 space-y-4">
-                        @foreach($recentLogs as $log)
+                        @foreach ($recentLogs as $log)
                             <div class="activity-item">
-                                <span class="status-chip {{ $log->level === 'error' ? 'badge-failed' : ($log->level === 'warning' ? 'badge-running' : 'badge-completed') }}">
+                                <span
+                                    class="status-chip {{ $log->level === 'error' ? 'badge-failed' : ($log->level === 'warning' ? 'badge-running' : 'badge-completed') }}">
                                     {{ strtoupper($log->level) }}
                                 </span>
                                 <div>
                                     <div class="text-white text-sm leading-6">{{ $log->message }}</div>
                                     <div class="text-slate-500 text-xs mt-1">
                                         {{ $log->workflowRun->workflow->name ?? 'Run' }}
-                                        @if($log->stepRun)
+                                        @if ($log->stepRun)
                                             · Step {{ $log->stepRun->step_id }}
                                         @endif
                                         · {{ $log->created_at->diffForHumans() }}
@@ -442,16 +463,17 @@
                     <div class="section-kicker mb-2">Workflows</div>
                     <h3 class="glass-title text-xl">Latest definitions</h3>
                 </div>
-                <a href="/workflows" class="text-sm text-indigo-300 hover:text-indigo-200 transition">See all workflows</a>
+                <a href="/workflows" class="text-sm text-indigo-300 hover:text-indigo-200 transition">See all
+                    workflows</a>
             </div>
 
-            @if($recentWorkflows->isEmpty())
+            @if ($recentWorkflows->isEmpty())
                 <div class="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-slate-500 text-sm">
                     No workflows created yet.
                 </div>
             @else
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    @foreach($recentWorkflows as $workflow)
+                    @foreach ($recentWorkflows as $workflow)
                         @php
                             $steps = collect(data_get($workflow->latestVersion, 'definition.steps', []))->take(6);
                             $trigger = $workflow->triggers->first()->type ?? 'manual';
@@ -462,13 +484,16 @@
                             <div class="flex items-start justify-between gap-4">
                                 <div class="min-w-0">
                                     <div class="flex flex-wrap items-center gap-2">
-                                        <span class="px-2 py-1 rounded-full text-[11px] font-semibold border {{ $triggerClass }}">{{ $trigger }}</span>
+                                        <span
+                                            class="px-2 py-1 rounded-full text-[11px] font-semibold border {{ $triggerClass }}">{{ $trigger }}</span>
                                         <span class="text-xs text-slate-500">{{ $workflow->runs_count }} runs</span>
                                     </div>
                                     <div class="text-white font-semibold mt-3 truncate">{{ $workflow->name }}</div>
-                                    <div class="text-slate-500 text-sm mt-1 line-clamp-2">{{ $workflow->description ?: 'No description provided.' }}</div>
+                                    <div class="text-slate-500 text-sm mt-1 line-clamp-2">
+                                        {{ $workflow->description ?: 'No description provided.' }}</div>
                                 </div>
-                                <a href="/workflows/{{ $workflow->id }}" class="text-slate-300 hover:text-white transition">View</a>
+                                <a href="/workflows/{{ $workflow->id }}"
+                                    class="text-slate-300 hover:text-white transition">View</a>
                             </div>
 
                             <div class="mt-4 flex items-center justify-between text-xs text-slate-500">
@@ -478,7 +503,8 @@
 
                             <div class="workflow-mini mt-3">
                                 @forelse($steps as $step)
-                                    <span>{{ data_get($step, 'type', 'step') }} · {{ data_get($step, 'id', 'node') }}</span>
+                                    <span>{{ data_get($step, 'type', 'step') }} ·
+                                        {{ data_get($step, 'id', 'node') }}</span>
                                 @empty
                                     <span>No DAG steps yet</span>
                                 @endforelse

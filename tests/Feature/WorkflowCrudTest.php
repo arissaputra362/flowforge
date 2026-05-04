@@ -3,13 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\Tenant;
+use App\Models\User;
 use App\Models\Workflow;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class WorkflowCrudTest extends TestCase
 {
-   use DatabaseTransactions;
+   use RefreshDatabase;
 
     public function test_it_creates_a_workflow_with_initial_version(): void
     {
@@ -17,11 +19,12 @@ class WorkflowCrudTest extends TestCase
             'name' => 'Tenant A',
             'metadata' => ['tier' => 'pro'],
         ]);
+        $this->actingAsTenantUser($tenant);
 
         $response = $this->postJson('/api/workflows', [
-            'tenant_id' => $tenant->id,
             'name' => 'Test Workflow',
             'description' => 'Workflow for testing',
+            'trigger_type' => 'manual',
             'definition' => [
                 'steps' => [
                     [
@@ -54,6 +57,7 @@ class WorkflowCrudTest extends TestCase
             'name' => 'Tenant B',
             'metadata' => ['tier' => 'standard'],
         ]);
+        $this->actingAsTenantUser($tenant);
 
         $workflow = Workflow::create([
             'tenant_id' => $tenant->id,
@@ -75,9 +79,9 @@ class WorkflowCrudTest extends TestCase
         ]);
 
         $response = $this->putJson('/api/workflows/'.$workflow->id, [
-            'tenant_id' => $tenant->id,
             'name' => 'Updated Workflow',
             'description' => 'Updated description',
+            'trigger_type' => 'manual',
             'definition' => [
                 'steps' => [
                     [
@@ -116,6 +120,7 @@ class WorkflowCrudTest extends TestCase
             'name' => 'Tenant C',
             'metadata' => [],
         ]);
+        $this->actingAsTenantUser($tenant);
 
         $workflow = Workflow::create([
             'tenant_id' => $tenant->id,
@@ -167,6 +172,7 @@ class WorkflowCrudTest extends TestCase
             'name' => 'Tenant A',
             'metadata' => [],
         ]);
+        $this->actingAsTenantUser($tenantA);
 
         $tenantB = Tenant::create([
             'name' => 'Tenant B',
@@ -216,5 +222,19 @@ class WorkflowCrudTest extends TestCase
         $response->assertOk();
         $response->assertJsonPath('data.0.name', 'Workflow A');
         $response->assertJsonMissing(['name' => 'Workflow B']);
+    }
+
+    private function actingAsTenantUser(Tenant $tenant): User
+    {
+        $user = User::create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Tenant User',
+            'email' => 'tenant-'.str()->uuid().'@example.test',
+            'password' => 'password',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        return $user;
     }
 }

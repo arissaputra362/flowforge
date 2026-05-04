@@ -327,8 +327,11 @@
             </div>
 
             <div class="flex items-center gap-3">
-                <span class="badge badge-{{ $workflow->trigger_type === 'manual' ? 'pending' : 'running' }}">
-                    {{ $workflow->trigger_type }}
+                @php
+                    $triggerType = $workflow->triggers->first()->type ?? 'manual';
+                @endphp
+                <span class="badge badge-{{ $triggerType === 'manual' ? 'pending' : 'running' }}">
+                    {{ $triggerType }}
                 </span>
                 <span class="text-slate-600 text-xs">v{{ $workflow->latestVersion->version_number ?? 1 }}</span>
             </div>
@@ -510,6 +513,9 @@
         let pusherInstance = null;
         let elapsedTimer = null;
         let startTime = null;
+        let pollTimer = null;
+        let pollInFlight = false;
+        let lastLogSeq = 0;
 
         // step states: { stepId: { status, type, attempt, output, error, ai_analysis, started_at, finished_at } }
         let stepStates = {};
@@ -594,6 +600,7 @@
 
                 // subscribe websocket
                 subscribeToRun(currentRunId);
+                startPolling();
 
             } catch (err) {
                 appendLog('error', `✗ ${err.message}`);
@@ -637,7 +644,8 @@
             channel.bind('App\\Events\\StepStarted', data => {
                 updateStep(data.step_id, {
                     status: 'running',
-                    attempt: data.attempt
+                    attempt: data.attempt,
+                    started_at: data.timestamp,
                 });
                 appendLog('info', `⚙ [${data.step_id}] started (attempt ${data.attempt})`);
             });
@@ -677,6 +685,7 @@
                 appendLog('success', `🎉 Workflow completed!`);
                 stopTimer();
                 setRunning(false);
+                stopPolling();
             });
 
             channel.bind('App\\Events\\WorkflowFailed', () => {
@@ -684,6 +693,7 @@
                 appendLog('error', `✗ Workflow failed.`);
                 stopTimer();
                 setRunning(false); // ← tombol Run aktif lagi
+                stopPolling();
             });
         }
 
@@ -831,11 +841,25 @@
             const stream = document.getElementById('logStream');
             const now = new Date().toLocaleTimeString('id-ID', {
                 hour12: false,
-                timeZone: 'Asia/Jakarta', // UTC+7 / WIB
+                timeZone: 'Asia/Jakarta',
             });
             const line = document.createElement('div');
             line.className = `log-line ${level}`;
             line.textContent = `[${now}] ${message}`;
+            stream.appendChild(line);
+            stream.scrollTop = stream.scrollHeight;
+        }
+
+        function appendLogWithTime(level, message, timestamp) {
+            const stream = document.getElementById('logStream');
+            const date = timestamp ? new Date(timestamp) : new Date();
+            const time = date.toLocaleTimeString('id-ID', {
+                hour12: false,
+                timeZone: 'Asia/Jakarta',
+            });
+            const line = document.createElement('div');
+            line.className = `log-line ${level}`;
+            line.textContent = `[${time}] ${message}`;
             stream.appendChild(line);
             stream.scrollTop = stream.scrollHeight;
         }
@@ -879,6 +903,110 @@
             return new Date(iso).toLocaleTimeString('id-ID', {
                 hour12: false
             });
+        }
+
+        function startPolling() {
+            if (pollTimer) {
+                return;
+            }
+            pollTimer = setInterval(pollRun, 4000);
+            pollRun();
+        }
+
+        function stopPolling() {
+            if (pollTimer) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+            }
+        }
+
+        async function pollRun() {
+            if (!currentRunId || pollInFlight) {
+                return;
+            }
+
+            pollInFlight = true;
+
+            try {
+                const res = await fetch(`${API_BASE}/runs/${currentRunId}/poll?since=${lastLogSeq}`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Authorization': 'Bearer ' + TOKEN,
+                    }
+                });
+
+                if (!res.ok) {
+                    throw new Error('Polling failed');
+                }
+
+                const data = await res.json();
+                syncFromPoll(data);
+            } catch (err) {
+                appendLog('warn', `⚠ Polling error: ${err.message}`);
+            } finally {
+                pollInFlight = false;
+            }
+        }
+
+        function syncFromPoll(data) {
+            if (!data) {
+                return;
+            }
+
+            if (data.run && data.run.status) {
+                setWorkflowStatus(data.run.status);
+                if (['completed', 'failed'].includes(data.run.status)) {
+                    stopTimer();
+                    setRunning(false);
+                    stopPolling();
+                }
+            }
+
+            if (Array.isArray(data.steps)) {
+                data.steps.forEach(step => {
+                    if (!step || !step.step_id) {
+                        return;
+                    }
+                    if (!stepStates[step.step_id]) {
+                        stepStates[step.step_id] = {};
+                    }
+                    stepStates[step.step_id] = {
+                        ...stepStates[step.step_id],
+                        status: step.status ?? stepStates[step.step_id].status,
+                        attempt: step.attempt ?? stepStates[step.step_id].attempt,
+                        output: step.output ?? stepStates[step.step_id].output,
+                        error: step.error ?? stepStates[step.step_id].error,
+                        ai_analysis: step.ai_analysis ?? stepStates[step.step_id].ai_analysis,
+                        started_at: step.started_at ?? stepStates[step.step_id].started_at,
+                        finished_at: step.finished_at ?? stepStates[step.step_id].finished_at,
+                    };
+                });
+                renderTimeline();
+                updateStepCount();
+
+                const card = document.getElementById('stepDetailCard');
+                if (card.classList.contains('visible')) {
+                    const selectedId = document.getElementById('detailStepId').textContent;
+                    if (selectedId) {
+                        showStepDetail(selectedId);
+                    }
+                }
+            }
+
+            if (Array.isArray(data.logs)) {
+                data.logs.forEach(log => {
+                    if (!log) {
+                        return;
+                    }
+                    const level = log.level === 'warning' ? 'warn' : (log.level ?? 'info');
+                    const stepId = log.context?.step_id ? `[${log.context.step_id}] ` : '';
+                    appendLogWithTime(level, `${stepId}${log.message}`, log.created_at);
+                });
+            }
+
+            if (typeof data.last_seq === 'number') {
+                lastLogSeq = Math.max(lastLogSeq, data.last_seq);
+            }
         }
     </script>
 @endpush

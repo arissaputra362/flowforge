@@ -22,34 +22,46 @@ class WorkflowController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        // $workflows = $this->workflowService->paginate(
-        //     $request->filled('tenant_id') ? $request->string('tenant_id')->toString() : null,
-        //     $request->integer('per_page', 15),
-        // );
-
-        // return response()->json($workflows);
-
         $user = $request->user();
         Log::debug(json_encode($user));
 
-        $query = $this->workflowService->baseQuery(
+        $this->authorize('viewAny', Workflow::class);
+
+        if ($request->has('draw') || $request->has('start') || $request->has('length')) {
+            $query = $this->workflowService->baseQuery(
+                $user->tenant_id ?? null,
+            );
+
+            return DataTables::of($query)
+                ->addColumn('version', fn($w) => optional($w->latestVersion)->version)
+                ->addColumn('runs_count', fn($w) => $w->runs_count ?? 0)
+                ->filter(function ($query) use ($request) {
+                    if ($search = $request->input('search.value')) {
+                        $query->where('name', 'ilike', "%{$search}%");
+                    }
+                })
+                ->make(true);
+        }
+
+        $paginator = $this->workflowService->paginateWithFilters(
             $user->tenant_id ?? null,
+            [
+                'per_page' => $request->integer('per_page', 15),
+                'page' => $request->integer('page', 1),
+                'search' => $request->query('search'),
+                'sort_by' => $request->query('sort_by', 'created_at'),
+                'sort_dir' => $request->query('sort_dir', 'desc'),
+                'trigger_type' => $request->query('trigger_type'),
+            ]
         );
 
-        return DataTables::of($query)
-            ->addColumn('version', fn($w) => optional($w->latestVersion)->version)
-            ->addColumn('runs_count', fn($w) => $w->runs()->count())
-            ->filter(function ($query) use ($request) {
-                if ($search = $request->input('search.value')) {
-                    $query->where('name', 'ilike', "%{$search}%");
-                }
-            })
-            ->make(true);
+        return response()->json($paginator);
 
     }
 
     public function store(WorkflowRequest $request): JsonResponse
     {
+        $this->authorize('create', Workflow::class);
         Log::debug('Creating workflow with data', ['data' => $request->validated()]);
         $workflow = $this->workflowService->create($request->user(), $request->validated());
 

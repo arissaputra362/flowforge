@@ -119,9 +119,7 @@
                 (s.branches?.true === prevStep.id || s.branches?.false === prevStep.id)
             ) : false;
 
-            const dependsOn = (index === 0 || prevIsCondition || prevIsBranchTarget) ?
-                [] :
-                [steps[index - 1].id];
+            const dependsOn = (index === 0 || prevIsCondition || prevIsBranchTarget) ? [] : [steps[index - 1].id];
 
             steps.push({
                 id: 'step_' + (index + 1),
@@ -202,6 +200,46 @@
             syncJSON();
         }
 
+        function updateDependsOn(index, selectedIds) {
+            steps[index].depends_on = selectedIds;
+            renderPreview();
+            syncJSON();
+        }
+
+        // ========================= RENDER DEPENDS ON =========================
+        function renderDependsOn(step, index) {
+            const otherSteps = steps.filter(s => s.id !== step.id);
+            if (otherSteps.length === 0) {
+                return '<p class="text-xs text-slate-600">Depends on: none (first step)</p>';
+            }
+            const checkboxes = otherSteps.map(s => {
+                const checked = step.depends_on.includes(s.id) ? 'checked' : '';
+                return `<label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                    <input type="checkbox" value="${s.id}" ${checked}
+                        onchange="handleDependsOnChange(${index}, this)"
+                        class="accent-indigo-400">
+                    <span class="px-1.5 py-0.5 rounded bg-white/10 font-mono">${s.id}</span>
+                    <span class="text-slate-500">(${s.type})</span>
+                </label>`;
+            }).join('');
+            return `
+                <div>
+                    <label class="text-xs text-slate-400 block mb-1">Depends on</label>
+                    <div class="flex flex-wrap gap-2 bg-black/20 rounded-lg p-2">
+                        ${checkboxes}
+                    </div>
+                </div>
+            `;
+        }
+
+        function handleDependsOnChange(index, checkbox) {
+            // Kumpulkan semua checkbox yang checked untuk step ini
+            const container = checkbox.closest('.flex.flex-wrap');
+            const selected = [...container.querySelectorAll('input[type=checkbox]:checked')]
+                .map(el => el.value);
+            updateDependsOn(index, selected);
+        }
+
         // ========================= RENDER STEPS (FORM) =========================
         function renderSteps() {
             const container = document.getElementById('steps-container');
@@ -247,9 +285,7 @@
 
                     ${renderConfig(step, index)}
 
-                    <p class="text-xs text-slate-600">
-                        Depends on: ${step.depends_on.length ? step.depends_on.join(', ') : 'none'}
-                    </p>
+                    ${renderDependsOn(step, index)}
                 </div>
             `;
             });
@@ -367,6 +403,153 @@
         }
 
         // ========================= RENDER PREVIEW =========================
+        // function renderPreview() {
+        //     const container = document.getElementById('flow-preview');
+        //     container.innerHTML = '';
+
+        //     if (steps.length === 0) {
+        //         container.innerHTML = '<p class="text-slate-600 text-xs text-center mt-8">Add steps to see preview</p>';
+        //         return;
+        //     }
+
+        //     const typeIcon = {
+        //         http: '🌐',
+        //         delay: '⏱',
+        //         condition: '◆',
+        //         script: '⚡'
+        //     };
+        //     const typeColor = {
+        //         http: 'border-blue-500/40 text-blue-400',
+        //         delay: 'border-yellow-500/40 text-yellow-400',
+        //         condition: 'border-purple-500/60 text-purple-400',
+        //         script: 'border-green-500/40 text-green-400',
+        //     };
+
+        //     // Tentukan step mana yang branch target
+        //     const branchTargets = {};
+        //     steps.forEach(s => {
+        //         if (s.type === 'condition') {
+        //             if (s.branches?.true) branchTargets[s.branches.true] = {
+        //                 from: s.id,
+        //                 side: 'true'
+        //             };
+        //             if (s.branches?.false) branchTargets[s.branches.false] = {
+        //                 from: s.id,
+        //                 side: 'false'
+        //             };
+        //         }
+        //     });
+
+        //     // Render node
+        //     const renderNode = (step) => {
+        //         const colors = typeColor[step.type] || 'border-white/20 text-slate-400';
+        //         const icon = typeIcon[step.type] || '●';
+        //         return `
+    //         <div class="flex flex-col items-center">
+    //             <div class="border ${colors} bg-black/30 rounded-lg px-3 py-2 text-center min-w-[100px]">
+    //                 <div class="text-base">${icon}</div>
+    //                 <div class="text-xs font-semibold text-white mt-1">${step.id}</div>
+    //                 <div class="text-xs text-slate-500">${step.type}</div>
+    //                 ${step.type === 'condition' && step.config.expression
+    //                     ? `<div class="text-xs text-purple-400 mt-1 font-mono truncate max-w-[120px]">${step.config.expression}</div>`
+    //                     : ''}
+    //             </div>
+    //         </div>
+    //     `;
+        //     };
+
+        //     // Render arrow
+        //     const arrowDown = `
+    //     <div class="flex justify-center">
+    //         <div style="width:2px;height:20px;background:rgba(255,255,255,0.15);position:relative;">
+    //             <div style="position:absolute;bottom:-4px;left:-3px;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid rgba(255,255,255,0.2);"></div>
+    //         </div>
+    //     </div>
+    //     `;
+
+        //     // Render branch split untuk condition
+        //     const renderBranch = (condStep) => {
+        //         const trueStep = steps.find(s => s.id === condStep.branches?.true);
+        //         const falseStep = steps.find(s => s.id === condStep.branches?.false);
+
+        //         if (!trueStep && !falseStep) return '';
+
+        //         return `
+    //         <div class="w-full">
+    //             <svg width="100%" height="40" viewBox="0 0 220 40" preserveAspectRatio="xMidYMid meet">
+    //                 <line x1="110" y1="0" x2="55"  y2="38" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="4,3"/>
+    //                 <line x1="110" y1="0" x2="165" y2="38" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="4,3"/>
+    //                 <rect x="20"  y="12" width="32" height="14" rx="7" fill="rgba(34,197,94,0.15)"/>
+    //                 <text x="36"  y="23" text-anchor="middle" font-size="9" fill="#4ade80" font-family="sans-serif">true</text>
+    //                 <rect x="168" y="12" width="34" height="14" rx="7" fill="rgba(239,68,68,0.15)"/>
+    //                 <text x="185" y="23" text-anchor="middle" font-size="9" fill="#f87171" font-family="sans-serif">false</text>
+    //             </svg>
+    //             <div class="grid grid-cols-2 gap-3">
+    //                 <div class="flex flex-col items-center">
+    //                     ${trueStep ? renderNode(trueStep) : '<div class="text-xs text-slate-600 text-center">—</div>'}
+    //                 </div>
+    //                 <div class="flex flex-col items-center">
+    //                     ${falseStep ? renderNode(falseStep) : '<div class="text-xs text-slate-600 text-center">—</div>'}
+    //                 </div>
+    //             </div>
+    //         </div>
+    //     `;
+        //     };
+
+        //     // Loop render — skip branch targets (sudah dirender di dalam branch section)
+        //     const rendered = [];
+        //     steps.forEach((step, i) => {
+        //         if (branchTargets[step.id]) return; // skip, akan dirender di branch section
+
+        //         // Arrow sebelum node (kecuali pertama)
+        //         if (rendered.length > 0) {
+        //             rendered.push(arrowDown);
+        //         }
+
+        //         rendered.push(renderNode(step));
+
+        //         // Kalau condition dan punya branch, render branch section
+        //         if (step.type === 'condition') {
+        //             rendered.push(renderBranch(step));
+        //         }
+        //     });
+
+        //     container.innerHTML = rendered.join('');
+        // }
+
+
+        // ========================= HELPER: BRANCH SUBTREE =========================
+        // Kembalikan Set berisi semua step ID yang berada di subtree sisi branch tertentu
+        // dari sebuah condition step
+        function getBranchSubtree(conditionStepId, side) {
+            const condStep = steps.find(s => s.id === conditionStepId);
+            if (!condStep) return new Set();
+
+            const rootId = condStep.branches?.[side];
+            if (!rootId) return new Set();
+
+            const result = new Set();
+            const visited = new Set();
+            const queue = [rootId];
+
+            while (queue.length) {
+                const id = queue.shift();
+                if (visited.has(id)) continue;
+                visited.add(id);
+                result.add(id);
+
+                // Tambahkan semua step yang depends_on step ini
+                steps.forEach(s => {
+                    if (s.depends_on.includes(id) && !visited.has(s.id)) {
+                        queue.push(s.id);
+                    }
+                });
+            }
+
+            return result;
+        }
+
+        // ========================= RENDER PREVIEW =========================
         function renderPreview() {
             const container = document.getElementById('flow-preview');
             container.innerHTML = '';
@@ -389,56 +572,92 @@
                 script: 'border-green-500/40 text-green-400',
             };
 
-            // Tentukan step mana yang branch target
-            const branchTargets = {};
+            // ---- bangun adjacency: semua edges (depends_on + branches) ----
+            // parentMap[id] = array of parent IDs
+            const parentMap = {};
             steps.forEach(s => {
+                parentMap[s.id] = [];
+            });
+
+            steps.forEach(s => {
+                // depends_on edges
+                s.depends_on.forEach(dep => {
+                    if (parentMap[s.id]) parentMap[s.id].push(dep);
+                });
+                // branch edges
                 if (s.type === 'condition') {
-                    if (s.branches?.true) branchTargets[s.branches.true] = {
-                        from: s.id,
-                        side: 'true'
-                    };
-                    if (s.branches?.false) branchTargets[s.branches.false] = {
-                        from: s.id,
-                        side: 'false'
-                    };
+                    if (s.branches?.true && parentMap[s.branches.true]) parentMap[s.branches.true].push(s.id);
+                    if (s.branches?.false && parentMap[s.branches.false]) parentMap[s.branches.false].push(s.id);
                 }
             });
 
-            // Render node
+            // ---- hitung rank = max(rank semua parent) + 1, iterasi hingga stabil ----
+            const rank = {};
+            steps.forEach(s => rank[s.id] = 0);
+
+            let changed = true;
+            let safetyLimit = 0;
+            while (changed && safetyLimit++ < 100) {
+                changed = false;
+                steps.forEach(s => {
+                    parentMap[s.id].forEach(pid => {
+                        if (rank[pid] !== undefined && rank[s.id] <= rank[pid]) {
+                            rank[s.id] = rank[pid] + 1;
+                            changed = true;
+                        }
+                    });
+                });
+            }
+
+            // ---- kelompokkan per rank ----
+            const levels = {};
+            steps.forEach(s => {
+                const r = rank[s.id];
+                if (!levels[r]) levels[r] = [];
+                levels[r].push(s);
+            });
+            const sortedLevels = Object.keys(levels).map(Number).sort((a, b) => a - b);
+
+            // ---- cek apakah transisi antar level adalah branch split ----
+            // branch split = level sebelumnya punya condition node yang branch ke level ini
+            function isBranchSplit(prevLevelNum, curLevelNum) {
+                const prevSteps = levels[prevLevelNum] || [];
+                const curSteps = levels[curLevelNum] || [];
+                return prevSteps.some(ps =>
+                    ps.type === 'condition' &&
+                    curSteps.some(cs => ps.branches?.true === cs.id || ps.branches?.false === cs.id)
+                );
+            }
+
+            // ---- render helpers ----
             const renderNode = (step) => {
                 const colors = typeColor[step.type] || 'border-white/20 text-slate-400';
                 const icon = typeIcon[step.type] || '●';
+                const depList = step.depends_on.length ?
+                    `<div class="text-xs text-slate-600 mt-1 font-mono truncate">← ${step.depends_on.join(', ')}</div>` :
+                    '';
                 return `
-                <div class="flex flex-col items-center">
-                    <div class="border ${colors} bg-black/30 rounded-lg px-3 py-2 text-center min-w-[100px]">
+                    <div class="border ${colors} bg-black/30 rounded-lg px-3 py-2 text-center min-w-[90px] max-w-[130px]">
                         <div class="text-base">${icon}</div>
                         <div class="text-xs font-semibold text-white mt-1">${step.id}</div>
                         <div class="text-xs text-slate-500">${step.type}</div>
                         ${step.type === 'condition' && step.config.expression
-                            ? `<div class="text-xs text-purple-400 mt-1 font-mono truncate max-w-[120px]">${step.config.expression}</div>`
+                            ? `<div class="text-xs text-purple-400 mt-1 font-mono truncate max-w-[110px]">${step.config.expression}</div>`
                             : ''}
-                    </div>
-                </div>
-            `;
+                        ${depList}
+                    </div>`;
             };
 
-            // Render arrow
             const arrowDown = `
-            <div class="flex justify-center">
-                <div style="width:2px;height:20px;background:rgba(255,255,255,0.15);position:relative;">
-                    <div style="position:absolute;bottom:-4px;left:-3px;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid rgba(255,255,255,0.2);"></div>
-                </div>
-            </div>
-        `;
+                <div class="flex justify-center w-full">
+                    <div style="width:2px;height:18px;background:rgba(255,255,255,0.15);position:relative;">
+                        <div style="position:absolute;bottom:-4px;left:-3px;
+                            border-left:4px solid transparent;border-right:4px solid transparent;
+                            border-top:5px solid rgba(255,255,255,0.2);"></div>
+                    </div>
+                </div>`;
 
-            // Render branch split untuk condition
-            const renderBranch = (condStep) => {
-                const trueStep = steps.find(s => s.id === condStep.branches?.true);
-                const falseStep = steps.find(s => s.id === condStep.branches?.false);
-
-                if (!trueStep && !falseStep) return '';
-
-                return `
+            const branchSplitSVG = `
                 <div class="w-full">
                     <svg width="100%" height="40" viewBox="0 0 220 40" preserveAspectRatio="xMidYMid meet">
                         <line x1="110" y1="0" x2="55"  y2="38" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="4,3"/>
@@ -448,37 +667,75 @@
                         <rect x="168" y="12" width="34" height="14" rx="7" fill="rgba(239,68,68,0.15)"/>
                         <text x="185" y="23" text-anchor="middle" font-size="9" fill="#f87171" font-family="sans-serif">false</text>
                     </svg>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="flex flex-col items-center">
-                            ${trueStep ? renderNode(trueStep) : '<div class="text-xs text-slate-600 text-center">—</div>'}
-                        </div>
-                        <div class="flex flex-col items-center">
-                            ${falseStep ? renderNode(falseStep) : '<div class="text-xs text-slate-600 text-center">—</div>'}
-                        </div>
-                    </div>
-                </div>
-            `;
-            };
+                </div>`;
 
-            // Loop render — skip branch targets (sudah dirender di dalam branch section)
-            const rendered = [];
-            steps.forEach((step, i) => {
-                if (branchTargets[step.id]) return; // skip, akan dirender di branch section
+            // ---- susun HTML ----
+            // Ganti seluruh bagian "susun HTML" dengan ini:
+            const html = [];
+            sortedLevels.forEach((levelNum, li) => {
+                const stepsInLevel = levels[levelNum];
+                const prevLevelNum = li > 0 ? sortedLevels[li - 1] : null;
 
-                // Arrow sebelum node (kecuali pertama)
-                if (rendered.length > 0) {
-                    rendered.push(arrowDown);
+                if (li > 0) {
+                    if (isBranchSplit(prevLevelNum, levelNum) && stepsInLevel.length >= 2) {
+                        html.push(branchSplitSVG);
+                    } else {
+                        html.push(arrowDown);
+                    }
                 }
 
-                rendered.push(renderNode(step));
+                if (stepsInLevel.length === 1) {
+                    // Cek apakah step ini adalah child dari salah satu sisi branch
+                    // Jika ya, render dalam grid 2 kolom dengan placeholder di sisi lain
+                    const prevSteps = prevLevelNum !== null ? (levels[prevLevelNum] || []) : [];
+                    const condInPrev = prevSteps.find(ps => ps.type === 'condition');
 
-                // Kalau condition dan punya branch, render branch section
-                if (step.type === 'condition') {
-                    rendered.push(renderBranch(step));
+                    if (condInPrev) {
+                        const trueTarget = condInPrev.branches?.true;
+                        const falseTarget = condInPrev.branches?.false;
+
+                        // Cari step di level sebelumnya yang jadi parent langsung
+                        // via depends_on ke step ini
+                        const isChildOfTrue = stepsInLevel[0].depends_on.includes(trueTarget) ||
+                            stepsInLevel[0].id === trueTarget;
+                        const isChildOfFalse = stepsInLevel[0].depends_on.includes(falseTarget) ||
+                            stepsInLevel[0].id === falseTarget;
+
+                        // Lebih akurat: cek apakah parent langsung step ini ada di branch true/false side
+                        const trueSubtree = getBranchSubtree(condInPrev.id, 'true');
+                        const falseSubtree = getBranchSubtree(condInPrev.id, 'false');
+                        const stepId = stepsInLevel[0].id;
+
+                        if (trueSubtree.has(stepId) && !falseSubtree.has(stepId)) {
+                            // step ini di sisi true, kolom kanan kosong
+                            html.push(`
+                                <div class="grid grid-cols-2 gap-3 w-full">
+                                    <div class="flex justify-center">${renderNode(stepsInLevel[0])}</div>
+                                    <div></div>
+                                </div>`);
+                            return;
+                        } else if (falseSubtree.has(stepId) && !trueSubtree.has(stepId)) {
+                            // step ini di sisi false, kolom kiri kosong
+                            html.push(`
+                                <div class="grid grid-cols-2 gap-3 w-full">
+                                    <div></div>
+                                    <div class="flex justify-center">${renderNode(stepsInLevel[0])}</div>
+                                </div>`);
+                            return;
+                        }
+                    }
+
+                    html.push(`<div class="flex justify-center w-full">${renderNode(stepsInLevel[0])}</div>`);
+                } else {
+                    const cols = stepsInLevel.length;
+                    const nodes = stepsInLevel.map(s =>
+                        `<div class="flex justify-center">${renderNode(s)}</div>`
+                    ).join('');
+                    html.push(`<div class="grid grid-cols-${cols} gap-3 w-full">${nodes}</div>`);
                 }
             });
 
-            container.innerHTML = rendered.join('');
+            container.innerHTML = html.join('');
         }
 
         // ========================= SYNC JSON =========================

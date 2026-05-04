@@ -1,4 +1,33 @@
+x-app-env: &app-env
+  APP_ENV: local
+  APP_DEBUG: "true"
+  APP_URL: http://localhost:8080
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_DATABASE: flowforge
+  DB_USERNAME: flowforge
+  DB_PASSWORD: secret
+  QUEUE_CONNECTION: redis
+  CACHE_STORE: redis
+  REDIS_CLIENT: phpredis
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  REDIS_PASSWORD: ""
+  BROADCAST_CONNECTION: reverb
+  REVERB_APP_ID: flowforge-local
+  REVERB_APP_KEY: flowforge-local-key
+  REVERB_APP_SECRET: flowforge-local-secret
+  REVERB_HOST: reverb
+  REVERB_PORT: 8080
+  REVERB_SCHEME: http
+  VITE_REVERB_APP_KEY: flowforge-local-key
+  VITE_REVERB_HOST: localhost
+  VITE_REVERB_PORT: 8082
+  VITE_REVERB_SCHEME: http
+
 services:
+
   app:
     build:
       context: .
@@ -6,31 +35,81 @@ services:
     container_name: flowforge-app
     restart: unless-stopped
     working_dir: /var/www/html
-    ports:
-      - "8081:8080"
     volumes:
       - .:/var/www/html
       - vendor:/var/www/html/vendor
-    environment:
-      APP_ENV: local
-      APP_DEBUG: "true"
-      APP_URL: http://localhost:8080
-      DB_CONNECTION: pgsql
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_DATABASE: flowforge
-      DB_USERNAME: flowforge
-      DB_PASSWORD: secret
-      QUEUE_CONNECTION: redis
-      REDIS_CLIENT: phpredis
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ""
+    environment: *app-env
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flowforge-queue
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: php artisan queue:work redis --tries=3 --backoff=5,10,20 --timeout=300
+    volumes:
+      - .:/var/www/html
+      - vendor:/var/www/html/vendor
+    environment: *app-env
+    depends_on:
+      app:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flowforge-scheduler
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: php artisan schedule:work
+    volumes:
+      - .:/var/www/html
+      - vendor:/var/www/html/vendor
+    environment: *app-env
+    depends_on:
+      app:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  reverb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flowforge-reverb
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    ports:
+      - "8082:8080"
+    volumes:
+      - .:/var/www/html
+      - vendor:/var/www/html/vendor
+    environment: *app-env
+    depends_on:
+      app:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  assets:
+    image: node:22-alpine
+    container_name: flowforge-assets
+    working_dir: /var/www/html
+    command: sh -c "npm ci && npm run build"
+    volumes:
+      - .:/var/www/html
+    profiles:
+      - tools
 
   nginx:
     image: nginx:1.27-alpine

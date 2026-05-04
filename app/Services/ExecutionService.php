@@ -96,6 +96,11 @@ class ExecutionService
         $workflowRun = $stepRun->workflowRun;
         $logger = app(\App\Services\LogService::class);
 
+        if ($this->hasWorkflowTimedOut($workflowRun)) {
+            $this->markWorkflowTimedOut($workflowRun);
+            return;
+        }
+
         if ($this->hasUnfinishedDependencies($workflowRun, $stepRun)) {
             // caller should release the job for retry
             throw new \RuntimeException('Unfinished dependencies');
@@ -268,6 +273,11 @@ class ExecutionService
      */
     public function dispatchNextSteps(WorkflowRun $workflowRun, StepRun $completedStepRun): void
     {
+        if ($this->hasWorkflowTimedOut($workflowRun)) {
+            $this->markWorkflowTimedOut($workflowRun);
+            return;
+        }
+
         $version     = $workflowRun->workflowVersion;
         $definition  = $version->definition ?? $version->dag;
         $stepDef     = $this->getStepDefinition($workflowRun, $completedStepRun->step_id);
@@ -370,6 +380,11 @@ class ExecutionService
      */
     public function checkAndCompleteWorkflow(WorkflowRun $workflowRun): void
     {
+        if ($this->hasWorkflowTimedOut($workflowRun)) {
+            $this->markWorkflowTimedOut($workflowRun);
+            return;
+        }
+
          $unfinished = StepRun::where('workflow_run_id', $workflowRun->id)
             ->whereIn('status', ['pending', 'queued', 'running'])
             ->exists();
@@ -401,5 +416,45 @@ class ExecutionService
             $workflowRun->update(['status' => 'failed']);
             event(new \App\Events\WorkflowFailed($workflowRun));
         }
+    }
+
+    public function hasWorkflowTimedOut(WorkflowRun $workflowRun): bool
+    {
+        if (! in_array($workflowRun->status, ['pending', 'queued', 'running'], true)) {
+            return false;
+        }
+
+        $definition = $workflowRun->workflowVersion?->definition ?? [];
+        $timeoutSeconds = (int) ($definition['workflow_timeout_seconds'] ?? 300);
+
+        return $workflowRun->created_at !== null
+            && $workflowRun->created_at->copy()->addSeconds($timeoutSeconds)->isPast();
+    }
+
+    public function markWorkflowTimedOut(WorkflowRun $workflowRun): void
+    {
+        $workflowRun->refresh();
+
+        if ($workflowRun->status === 'failed') {
+            return;
+        }
+
+        StepRun::where('workflow_run_id', $workflowRun->id)
+            ->whereIn('status', ['pending', 'queued', 'running'])
+            ->update([
+                'status' => 'failed',
+                'last_error' => 'Workflow timed out',
+                'finished_at' => now(),
+            ]);
+
+        $workflowRun->update([
+            'status' => 'failed',
+            'output' => [
+                'error' => 'Workflow timed out',
+                'timeout_seconds' => (int) (($workflowRun->workflowVersion?->definition ?? [])['workflow_timeout_seconds'] ?? 300),
+            ],
+        ]);
+
+        event(new \App\Events\WorkflowFailed($workflowRun));
     }
 }

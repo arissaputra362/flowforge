@@ -25,6 +25,7 @@ class WorkflowRequest extends FormRequest
             'description' => ['nullable', 'string'],
             'trigger_type' => ['required', 'in:manual,cron,webhook'],
             'cron_expression' => 'nullable|string',
+            'workflow_timeout_seconds' => ['nullable', 'integer', 'min:1', 'max:86400'],
             'definition' => ['required'],
         ];
     }

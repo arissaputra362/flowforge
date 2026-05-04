@@ -34,10 +34,11 @@ Route::middleware('auth')->group(function () {
 
         // Viewer only
         Route::get('/', [WebWorkflowController::class, 'index'])->name('index');
-        
+
         // Admin and Editor
         Route::middleware('role:admin,editor')->group(function () {
             Route::get('/create', [WebWorkflowController::class, 'create'])->name('create');
+            Route::post('/store', [WebWorkflowController::class, 'store'])->name('store');
             Route::get('/{workflow}/edit', [WebWorkflowController::class, 'edit'])->name('edit');
         });
 
@@ -61,7 +62,8 @@ Route::middleware('auth')->group(function () {
 });
 
 // Run Monitor
-Route::get('/runs/{id}', [WebRunController::class, 'show']);
+Route::get('/runs/{id}', [WebRunController::class, 'show'])
+    ->middleware('auth');
 
 // Demo
 Route::get('/realtime-demo', [DemoController::class, 'index']);

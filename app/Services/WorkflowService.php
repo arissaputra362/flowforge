@@ -23,6 +23,11 @@ class WorkflowService
         return $this->workflowRepository->paginate($tenantId, $perPage);
     }
 
+    public function paginateWithFilters(?string $tenantId, array $filters): LengthAwarePaginator
+    {
+        return $this->workflowRepository->paginateWithFilters($tenantId, $filters);
+    }
+
     public function baseQuery(?string $tenantId){
         return $this->workflowRepository->query($tenantId);
     }
@@ -35,8 +40,16 @@ class WorkflowService
     public function create($user, array $data): Workflow
     {
         return DB::transaction(function () use ($user, $data): Workflow {
-            $dag = json_decode($data['definition'], true);
+            $dag = is_array($data['definition'])
+                ? $data['definition']
+                : json_decode($data['definition'], true);
+
             $definition = $this->dagParser->validate($dag);
+
+            if (isset($data['workflow_timeout_seconds'])) {
+                $definition['workflow_timeout_seconds'] = (int) $data['workflow_timeout_seconds'];
+            }
+
             $triggerData = [
                 'type' => $data['trigger_type'],
                 'config' => array_filter([
@@ -60,13 +73,20 @@ class WorkflowService
     public function update(Workflow $workflow, array $data): Workflow
     {
         return DB::transaction(function () use ($workflow, $data): Workflow {
-            $definition = json_decode($data['definition'], true);
+            $definition = is_array($data['definition'])
+                ? $data['definition']
+                : json_decode($data['definition'], true);
 
             if (! is_array($definition)) {
                 throw new Exception('Invalid workflow definition payload.');
             }
 
             $definition = $this->dagParser->validate($definition);
+
+            if (isset($data['workflow_timeout_seconds'])) {
+                $definition['workflow_timeout_seconds'] = (int) $data['workflow_timeout_seconds'];
+            }
+
             $triggerData = [
                 'type' => $data['trigger_type'],
                 'config' => array_filter([

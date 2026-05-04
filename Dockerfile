@@ -1,3 +1,15 @@
+FROM node:22-alpine AS assets
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY resources ./resources
+COPY public ./public
+COPY vite.config.js ./
+RUN npm run build
+
 FROM php:8.2-fpm-alpine
 
 WORKDIR /var/www/html
@@ -49,6 +61,8 @@ RUN composer install \
     --no-interaction \
     --no-progress \
     --optimize-autoloader
+
+COPY --from=assets /app/public/build ./public/build
 
 # Permission
 RUN mkdir -p storage bootstrap/cache \

@@ -41,16 +41,15 @@ class AuthService{
 
             // 4. Generate Token
             $token = $user->createToken('api')->plainTextToken;
-            $user->token = $token;
 
             // 5. Update create by tenant and user
             $this->tenantRepository->update([
                 'created_by' => $user->id
             ], $tenant->id);
 
-            $this->userRepository->update([
+            $this->userRepository->update($user,[
                 'created_by' => $user->id
-            ], $user->id);
+            ]);
 
             DB::commit();
             

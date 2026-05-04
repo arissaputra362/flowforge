@@ -28,7 +28,7 @@ class WorkflowPolicy
      */
     public function create(User $user): bool
     {
-        return true;
+        return $user->hasAnyRole(['admin', 'editor']);
     }
 
     /**
@@ -36,7 +36,7 @@ class WorkflowPolicy
      */
     public function update(User $user, Workflow $workflow): bool
     {
-        return $user->tenant_id === $workflow->tenant_id;
+        return $user->hasAnyRole(['admin', 'editor']) && $user->tenant_id === $workflow->tenant_id;
     }
 
     /**
@@ -44,7 +44,7 @@ class WorkflowPolicy
      */
     public function delete(User $user, Workflow $workflow): bool
     {
-        return $user->tenant_id === $workflow->tenant_id;
+        return $user->hasAnyRole(['admin', 'editor']) && $user->tenant_id === $workflow->tenant_id;
     }
 
     /**
@@ -52,7 +52,7 @@ class WorkflowPolicy
      */
     public function trigger(User $user, Workflow $workflow): bool
     {
-        return $user->tenant_id === $workflow->tenant_id;
+        return $user->hasAnyRole(['admin', 'editor', 'viewer']) && $user->tenant_id === $workflow->tenant_id;
     }
 
     /**
@@ -60,7 +60,7 @@ class WorkflowPolicy
      */
     public function restore(User $user, Workflow $workflow): bool
     {
-        return $user->tenant_id === $workflow->tenant_id;
+        return $user->hasAnyRole(['admin', 'editor']) && $user->tenant_id === $workflow->tenant_id;
     }
 
     /**
@@ -68,6 +68,6 @@ class WorkflowPolicy
      */
     public function forceDelete(User $user, Workflow $workflow): bool
     {
-        return $user->tenant_id === $workflow->tenant_id;
+        return $user->hasAnyRole(['admin', 'editor']) && $user->tenant_id === $workflow->tenant_id;
     }
 }

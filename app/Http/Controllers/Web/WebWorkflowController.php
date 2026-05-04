@@ -22,11 +22,7 @@ class WebWorkflowController extends Controller
 
     public function index(): View
     {
-        $workflows = $this->workflowService->paginate(null, 15);
-
-        return view('workflows.index', [
-            'workflows' => $workflows,
-        ]);
+        return view('workflows.index');
     }
 
     public function create(): View

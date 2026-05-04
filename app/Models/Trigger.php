@@ -21,11 +21,13 @@ class Trigger extends Model
         'type',
         'config',
         'enabled',
+        'last_triggered_at',
     ];
 
     protected $casts = [
         'config' => 'array',
         'enabled' => 'boolean',
+        'last_triggered_at' => 'datetime',
     ];
 
     /**

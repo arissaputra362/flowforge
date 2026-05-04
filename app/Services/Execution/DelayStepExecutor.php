@@ -20,7 +20,9 @@ class DelayStepExecutor
 
         $config = $stepDefinition['config'] ?? [];
 
-        $ms = (int) ($config['duration'] ?? $config['seconds'] ?? 1000);
+        $ms = isset($config['duration'])
+            ? (int) $config['duration']
+            : (int) (($config['seconds'] ?? 1) * 1000);
 
         usleep($ms * 1000); // ms → microseconds
 

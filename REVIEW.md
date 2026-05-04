@@ -4,7 +4,7 @@
 
 FlowForge is a Laravel-based workflow orchestration engine with DAG (Directed Acyclic Graph) execution, real-time monitoring, and AI-powered failure analysis. This document covers architectural decisions, design patterns, and potential improvements.
 
-**Status**: MVP-ready with 65% requirements complete. Security hardened (authorization + rate limiting). Core execution engine stable.
+**Status**: MVP-ready with webhook triggering, workflow timeout, security hardening (authorization + rate limiting), and a stable core execution engine.
 
 ---
 
@@ -103,10 +103,10 @@ public function backoff(): array
 - Thundering herd: All failed jobs retry simultaneously at same times
 - **Fix**: Add random jitter: `backoff[i] + random(0, backoff[i])`
 
-**⚠️ Issue #2: Per-Step Timeout Only**
-- Job timeout exists (300s) but workflow-level timeout missing
-- Long-running workflows can execute indefinitely
-- **Fix**: Add global timeout check before queueing next step
+**✅ Workflow-Level Timeout Added**
+- Job timeout still provides a hard per-job limit.
+- Workflow definitions can now set `workflow_timeout_seconds`; default is 300 seconds.
+- Timed out runs are marked failed and unfinished steps receive `Workflow timed out`.
 
 ---
 
@@ -240,6 +240,15 @@ $response = Http::timeout(10)
 - **Fix**: Implement rolling window of last 100-200 logs
 
 **✅ Strength**: Graceful fallback on API timeout (returns generic suggestion)
+
+---
+
+## Addendum: Recent Updates
+
+- **Polling fallback added**: Run monitor now keeps status/logs updated when WebSocket is unavailable.
+- **Cron triggers scheduled**: Added scheduler-driven cron trigger runner and Docker service to run `schedule:work`.
+- **Standard pagination**: `/api/workflows` and `/api/users` now support query-based pagination/filtering.
+- **Query optimization**: Added composite indexes for dashboard metrics and documented EXPLAIN output.
 
 ---
 
@@ -464,11 +473,11 @@ public function test_full_workflow_execution_flow()
 
 | Limitation | Impact | Workaround |
 |-----------|--------|-----------|
-| **No Global Workflow Timeout** | Long-running workflows never timeout | Add timeout config to WorkflowVersion |
-| **No Per-Step Timeout Config** | HTTP calls can hang indefinitely | Add timeout to step definition schema |
+| **Global Workflow Timeout** | ✅ Implemented | `workflow_timeout_seconds`, default 300s |
+| **Per-Step Timeout Config** | ✅ Implemented for HTTP | HTTP timeout fixed to apply before request |
 | **No Jitter in Retry** | Thundering herd on failures | Add random delay to backoff |
 | **No RBAC** | All users have same permissions | Implement Spatie Permissions |
-| **No Webhook Endpoint** | Webhook trigger not functional | Implement POST /api/webhooks/{token} |
+| **Webhook Endpoint** | ✅ Implemented | `POST /api/webhooks/{token}` |
 | **No DAG Visualization** | Users see linear list, not graph | Add Mermaid.js rendering |
 | **No Query Partitioning** | execution_logs table grows unbounded | Implement time-based partitioning |
 | **No Backup Strategy** | Data loss on DB failure | Document backup / restore procedure |
@@ -479,15 +488,15 @@ public function test_full_workflow_execution_flow()
 ## 8. Recommended Improvements (Priority Order)
 
 ### 🔴 Critical (Before Production)
-1. **Per-Step Timeout** (1.5h) — Add `timeout` field to step definition
-2. **Global Workflow Timeout** (1h) — Track elapsed time in ExecutionService
+1. **Per-Step Timeout** ✅ — HTTP step timeout is configured before dispatching the request
+2. **Global Workflow Timeout** ✅ — Track elapsed time in ExecutionService
 3. **REVIEW.md Completion** (This document) ✅
 4. **CI/CD Pipeline** (2.5h) — GitHub Actions for automated testing
 
 ### 🟠 High (For MVP+1)
 5. **DAG Visualization** (3h) — Mermaid.js graph rendering
 6. **RBAC Implementation** (2h) — Admin/Editor/Viewer roles
-7. **Webhook Endpoint** (2h) — Functional trigger_type=webhook
+7. **Webhook Endpoint** ✅ — Functional trigger_type=webhook
 8. **Integration Tests** (2h) — Full workflow execution tests
 
 ### 🟡 Medium (Future)

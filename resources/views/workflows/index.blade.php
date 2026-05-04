@@ -5,10 +5,12 @@
 @section('page_subtitle', 'Manage and monitor your workflows')
 
 @section('header_actions')
-    <a href="/workflows/create"
-        class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition">
-        + New Workflow
-    </a>
+    @hasanyrole('admin|editor')
+        <a href="{{ route('webworkflows.create') }}"
+            class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition">
+            + New Workflow
+        </a>
+    @endhasanyrole
 @endsection
 
 @section('content')
@@ -82,7 +84,7 @@
                         render: function(id) {
                             return `
                         <div class="flex justify-end gap-2">
-                            <a href="/workflows/${id}" 
+                            <a href="/workflows/${id}"
                                class="px-3 py-1 rounded bg-white/5 hover:bg-white/10 text-xs">
                                 View
                             </a>
@@ -93,17 +95,5 @@
                 ]
             });
         });
-
-        function runWorkflow(id) {
-            fetch(`/workflows/${id}/run`, {
-                    method: 'POST',
-                    headers: {
-                        Authorization: 'Bearer ' + TOKEN
-                    }
-                })
-                .then(res => res.json())
-                .then(() => alert('Workflow started'))
-                .catch(() => alert('Failed'));
-        }
     </script>
 @endpush

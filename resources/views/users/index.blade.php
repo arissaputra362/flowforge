@@ -13,7 +13,7 @@
 
 @section('content')
     <div class="glass p-6">
-        <table id="workflowTable" class="w-full text-sm">
+        <table id="usersTable" class="w-full text-sm">
             <thead>
                 <tr class="text-slate-400 border-b border-white/10">
                     <th class="text-left py-3">Name</th>
@@ -31,7 +31,7 @@
     <script>
         const TOKEN = "{{ session('api_token') }}"
         $(document).ready(function() {
-            $('#workflowTable').DataTable({
+            $('#usersTable').DataTable({
                 processing: true,
                 serverSide: true,
                 ajax: {
