@@ -37,6 +37,12 @@ class WorkflowService
         return DB::transaction(function () use ($user, $data): Workflow {
             $dag = json_decode($data['definition'], true);
             $definition = $this->dagParser->validate($dag);
+            $triggerData = [
+                'type' => $data['trigger_type'],
+                'config' => array_filter([
+                    'cron_expression' => $data['cron_expression'] ?? null,
+                ], fn ($value) => $value !== null && $value !== ''),
+            ];
 
             return $this->workflowRepository->create(
                 [
@@ -46,6 +52,7 @@ class WorkflowService
                 ],
                 $definition,
                 '1',
+                $triggerData,
             );
         });
     }
@@ -53,16 +60,28 @@ class WorkflowService
     public function update(Workflow $workflow, array $data): Workflow
     {
         return DB::transaction(function () use ($workflow, $data): Workflow {
-            $definition = $this->dagParser->validate($data['definition']);
+            $definition = json_decode($data['definition'], true);
+
+            if (! is_array($definition)) {
+                throw new Exception('Invalid workflow definition payload.');
+            }
+
+            $definition = $this->dagParser->validate($definition);
+            $triggerData = [
+                'type' => $data['trigger_type'],
+                'config' => array_filter([
+                    'cron_expression' => $data['cron_expression'] ?? null,
+                ], fn ($value) => $value !== null && $value !== ''),
+            ];
 
             return $this->workflowRepository->update(
                 $workflow,
                 [
-                    'tenant_id' => $data['tenant_id'],
                     'name' => $data['name'],
                     'description' => $data['description'] ?? null,
                 ],
                 $definition,
+                $triggerData,
             );
         });
     }

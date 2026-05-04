@@ -25,6 +25,7 @@ Route::middleware('auth')->group(function () {
     // Workflow UI
     Route::get('/workflows', [WebWorkflowController::class, 'index']);
     Route::get('/workflows/create', [WebWorkflowController::class, 'create']);
+    Route::get('/workflows/{id}/edit', [WebWorkflowController::class, 'edit']);
     Route::get('/workflows/{id}', [WebWorkflowController::class, 'show']);
     Route::get('/workflows/{id}/run', [WebWorkflowController::class, 'run']);
 });

@@ -19,9 +19,24 @@ class WebRunController extends Controller
     {
         $run = $this->workflowRunService->findWithDetails($id);
 
+        $stepOrder = collect(data_get($run->workflowVersion, 'definition.steps', []))
+            ->pluck('id')
+            ->values()
+            ->flip();
+
+        $stepRuns = $run->stepRuns
+            ->sortBy(function ($stepRun) use ($stepOrder) {
+                $position = $stepOrder->get($stepRun->step_id, PHP_INT_MAX);
+                $timestamp = optional($stepRun->started_at ?? $stepRun->created_at)->timestamp ?? 0;
+
+                return sprintf('%012d-%012d', $position, $timestamp);
+            })
+            ->values();
+
         return view('runs.show', [
             'run' => $run,
-            'stepRuns' => $run->stepRuns,
+            'stepRuns' => $stepRuns,
+            'workflowSteps' => collect(data_get($run->workflowVersion, 'definition.steps', [])),
         ]);
     }
 }

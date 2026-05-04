@@ -5,6 +5,7 @@ namespace App\Repositories;
 use App\Models\Workflow;
 use App\Models\WorkflowRun;
 use App\Models\WorkflowVersion;
+use App\Models\Trigger;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class WorkflowRepository
@@ -38,7 +39,7 @@ class WorkflowRepository
 
     public function findOrFail(string $workflowId, ?string $tenantId = null): Workflow
     {
-        $query = Workflow::query()->with(['tenant', 'versions']);
+        $query = Workflow::query()->with(['tenant', 'versions', 'triggers']);
 
         if ($tenantId !== null) {
             $query->where('tenant_id', $tenantId);
@@ -52,7 +53,7 @@ class WorkflowRepository
         return Workflow::with('latestVersion')->find($id);
     }
 
-    public function create(array $workflowData, array $definition, string $version = '1'): Workflow
+    public function create(array $workflowData, array $definition, string $version = '1', array $triggerData = []): Workflow
     {
         $workflow = Workflow::create($workflowData);
 
@@ -61,6 +62,8 @@ class WorkflowRepository
             'version' => $version,
             'definition' => $definition,
         ]);
+
+        $this->syncTrigger($workflow, $triggerData);
 
         return $this->loadWorkflow($workflow);
     }
@@ -76,7 +79,7 @@ class WorkflowRepository
         ]);
     }
 
-    public function update(Workflow $workflow, array $workflowData, array $definition): Workflow
+    public function update(Workflow $workflow, array $workflowData, array $definition, array $triggerData = []): Workflow
     {
         $workflow->fill($workflowData);
         $workflow->save();
@@ -94,12 +97,32 @@ class WorkflowRepository
             'definition' => $definition,
         ]);
 
+        $this->syncTrigger($workflow, $triggerData);
+
         return $this->loadWorkflow($workflow);
     }
 
     private function loadWorkflow(Workflow $workflow): Workflow
     {
-        return $this->attachLatestVersion($workflow->fresh()->load(['tenant', 'versions']));
+        return $this->attachLatestVersion($workflow->fresh()->load(['tenant', 'versions', 'triggers']));
+    }
+
+    private function syncTrigger(Workflow $workflow, array $triggerData): void
+    {
+        if (! isset($triggerData['type'])) {
+            return;
+        }
+
+        $config = $triggerData['config'] ?? [];
+
+        Trigger::updateOrCreate(
+            ['workflow_id' => $workflow->id],
+            [
+                'type' => $triggerData['type'],
+                'config' => ! empty($config) ? $config : null,
+                'enabled' => true,
+            ]
+        );
     }
 
     private function attachLatestVersion(Workflow $workflow): Workflow

@@ -34,6 +34,15 @@ class WebWorkflowController extends Controller
         return view('workflows.create');
     }
 
+    public function edit(string $id): View
+    {
+        $workflow = $this->workflowService->findOrFail($id);
+
+        return view('workflows.edit', [
+            'workflow' => $workflow,
+        ]);
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([

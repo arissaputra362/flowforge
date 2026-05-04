@@ -10,6 +10,8 @@ class WorkflowRunRepository
     {
         return WorkflowRun::with([
             'workflow',
+            'workflow.triggers',
+            'workflowVersion',
             'stepRuns' => function ($query) {
                 $query->orderBy('created_at');
             },

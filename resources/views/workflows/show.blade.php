@@ -6,6 +6,10 @@
 @section('page_subtitle', 'Workflow detail, version structure, and execution history.')
 
 @section('header_actions')
+    <a href="/workflows/{{ $workflow->id }}/edit"
+        class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 text-sm font-medium transition">
+        Edit Workflow
+    </a>
     <a href="/workflows"
         class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 text-sm font-medium transition">
         Back to List
@@ -22,6 +26,8 @@
         $latestVersion = $workflow->latestVersion;
         $definition = $latestVersion->definition ?? [];
         $steps = $definition['steps'] ?? [];
+        $currentTrigger = $workflow->triggers->first();
+        $triggerType = $currentTrigger->type ?? 'manual';
         $typeIcon = [
             'http' => '🌐',
             'delay' => '⏱',
@@ -59,8 +65,8 @@
                     {{ $workflow->description ?: 'No description provided for this workflow.' }}
                 </p>
                 <div class="flex flex-wrap items-center gap-2 mt-4">
-                    <span class="badge badge-{{ $workflow->trigger_type === 'manual' ? 'pending' : 'running' }}">
-                        {{ $workflow->trigger_type }}
+                    <span class="badge badge-{{ $triggerType === 'manual' ? 'pending' : 'running' }}">
+                        {{ $triggerType }}
                     </span>
                     <span class="badge badge-completed">{{ $workflow->versions->count() }} versions</span>
                     <span class="badge badge-pending">{{ $runs->count() }} runs</span>
@@ -95,7 +101,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
                     <div class="stat-card">
                         <p class="text-xs text-slate-500 mb-1">Trigger</p>
-                        <p class="text-white font-semibold text-sm uppercase tracking-wide">{{ $workflow->trigger_type }}</p>
+                        <p class="text-white font-semibold text-sm uppercase tracking-wide">{{ $triggerType }}</p>
                     </div>
                     <div class="stat-card">
                         <p class="text-xs text-slate-500 mb-1">Steps</p>

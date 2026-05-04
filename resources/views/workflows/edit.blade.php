@@ -1,12 +1,27 @@
 @extends('layouts.app')
 
-@section('title', 'Create Workflow')
-@section('page_title', 'Create Workflow')
-@section('page_subtitle', 'Define a new workflow orchestration.')
+@section('title', 'Edit Workflow')
+@section('page_title', 'Edit Workflow')
+@section('page_subtitle', 'Update workflow metadata and versioned definition.')
+
+@section('header_actions')
+    <a href="/workflows/{{ $workflow->id }}"
+        class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 text-sm font-medium transition">
+        Back to Detail
+    </a>
+@endsection
 
 @section('content')
-    <div class="max-w-6xl mx-auto fade-in">
+    @php
+        $latestVersion = $workflow->latestVersion;
+        $definition = $latestVersion->definition ?? ['steps' => []];
+        $steps = $definition['steps'] ?? [];
+        $currentTrigger = $workflow->triggers->first();
+        $currentTriggerType = old('trigger_type', $currentTrigger->type ?? 'manual');
+        $currentCronExpression = old('cron_expression', data_get($currentTrigger, 'config.cron_expression'));
+    @endphp
 
+    <div class="max-w-6xl mx-auto fade-in">
         <form id="workflowForm" class="glass p-8 space-y-8">
             @csrf
 
@@ -14,7 +29,7 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label class="block text-sm font-medium text-slate-300 mb-2">Workflow Name</label>
-                    <input type="text" name="name" value="{{ old('name') }}"
+                    <input type="text" name="name" value="{{ old('name', $workflow->name) }}"
                         class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
                         placeholder="e.g. Send Welcome Email" required>
                     @error('name')
@@ -26,9 +41,9 @@
                     <label class="block text-sm font-medium text-slate-300 mb-2">Trigger Type</label>
                     <select name="trigger_type" id="trigger_type"
                         class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white">
-                        <option value="manual">Manual</option>
-                        <option value="cron">Scheduled (Cron)</option>
-                        <option value="webhook">Webhook</option>
+                        <option value="manual" @selected($currentTriggerType === 'manual')>Manual</option>
+                        <option value="cron" @selected($currentTriggerType === 'cron')>Scheduled (Cron)</option>
+                        <option value="webhook" @selected($currentTriggerType === 'webhook')>Webhook</option>
                     </select>
                 </div>
             </div>
@@ -37,32 +52,30 @@
             <div>
                 <label class="block text-sm font-medium text-slate-300 mb-2">Description</label>
                 <textarea name="description" rows="3" id="description"
-                    class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" placeholder="Short description">{{ old('description') }}</textarea>
+                    class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
+                    placeholder="Short description">{{ old('description', $workflow->description) }}</textarea>
             </div>
 
             {{-- Cron --}}
             <div id="cron-field" class="hidden">
                 <label class="block text-sm font-medium text-slate-300 mb-2">Cron Expression</label>
-                <input type="text" name="cron_expression"
+                <input type="text" name="cron_expression" value="{{ $currentCronExpression }}"
                     class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
                     placeholder="* * * * *">
             </div>
 
             {{-- ================= BUILDER: 2 KOLOM ================= --}}
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                {{-- Kiri: Form Steps --}}
                 <div class="border border-white/10 rounded-xl p-6 space-y-4">
                     <div class="flex justify-between items-center">
                         <div>
                             <h3 class="text-white font-semibold">Steps Builder</h3>
-                            <p class="text-xs text-slate-400">Tambah dan konfigurasi steps</p>
+                            <p class="text-xs text-slate-400">Edit dan konfigurasi steps</p>
                         </div>
                     </div>
                     <div id="steps-container" class="space-y-3"></div>
                 </div>
 
-                {{-- Kanan: Visual Preview --}}
                 <div class="border border-white/10 rounded-xl p-6">
                     <div class="mb-4">
                         <h3 class="text-white font-semibold">Flow Preview</h3>
@@ -72,29 +85,28 @@
                         <p class="text-slate-600 text-xs text-center mt-8">Add steps to see preview</p>
                     </div>
                 </div>
-
             </div>
 
             <input type="hidden" name="definition" id="definition">
 
             {{-- Actions --}}
             <div class="flex justify-end gap-3 pt-4">
-                <a href="/workflows"
+                <a href="/workflows/{{ $workflow->id }}"
                     class="px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10">
                     Cancel
                 </a>
                 <button type="button" onclick="submitWorkflow()"
                     class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold">
-                    Save Workflow
+                    Update Workflow
                 </button>
             </div>
-
         </form>
     </div>
 @endsection
 
 @push('scripts')
     <script>
+        const WORKFLOW_ID = "{{ $workflow->id }}";
         const TOKEN = "{{ session('api_token') }}";
         const triggerSelect = document.getElementById('trigger_type');
         const cronField = document.getElementById('cron-field');
@@ -105,33 +117,41 @@
         triggerSelect.addEventListener('change', toggleCron);
         toggleCron();
 
-        // ========================= STATE =========================
-        let steps = [];
+        let steps = @json($steps);
 
-        // ========================= ADD STEP =========================
+        function normalizeSteps() {
+            steps = Array.isArray(steps) ? steps : [];
+            steps = steps.map((step, index) => ({
+                id: step.id || `step_${index + 1}`,
+                type: step.type || 'http',
+                depends_on: Array.isArray(step.depends_on) ? step.depends_on : [],
+                config: step.config || {},
+                branches: {
+                    true: step.branches?.true ?? null,
+                    false: step.branches?.false ?? null,
+                }
+            }));
+        }
+
+        normalizeSteps();
+
         function addStep() {
             const index = steps.length;
             const prevStep = index > 0 ? steps[index - 1] : null;
             const prevIsCondition = prevStep?.type === 'condition';
-
             const prevIsBranchTarget = prevStep ? steps.some(s =>
                 s.type === 'condition' &&
                 (s.branches?.true === prevStep.id || s.branches?.false === prevStep.id)
             ) : false;
 
-            const dependsOn = (index === 0 || prevIsCondition || prevIsBranchTarget) ?
-                [] :
-                [steps[index - 1].id];
+            const dependsOn = (index === 0 || prevIsCondition || prevIsBranchTarget) ? [] : [steps[index - 1].id];
 
             steps.push({
                 id: 'step_' + (index + 1),
                 type: 'http',
                 depends_on: dependsOn,
                 config: {},
-                branches: {
-                    true: null,
-                    false: null
-                }
+                branches: { true: null, false: null }
             });
 
             renderSteps();
@@ -139,12 +159,10 @@
             syncJSON();
         }
 
-        // ========================= REMOVE STEP =========================
         function removeStep(index) {
             const removedId = steps[index].id;
             steps.splice(index, 1);
 
-            // Bersihkan referensi ke step yang dihapus
             steps.forEach(s => {
                 s.depends_on = s.depends_on.filter(d => d !== removedId);
                 if (s.branches?.true === removedId) s.branches.true = null;
@@ -156,40 +174,30 @@
             syncJSON();
         }
 
-        // ========================= UPDATE TYPE =========================
         function updateType(index, value) {
             const currentDependsOn = steps[index].depends_on;
             steps[index].type = value;
             steps[index].config = {};
             steps[index].depends_on = currentDependsOn;
-            steps[index].branches = {
-                true: null,
-                false: null
-            };
+            steps[index].branches = { true: null, false: null };
 
             renderSteps();
             renderPreview();
             syncJSON();
         }
 
-        // ========================= UPDATE CONFIG =========================
         function updateConfig(index, key, value) {
             steps[index].config[key] = value;
             syncJSON();
         }
 
-        // ========================= UPDATE BRANCH =========================
         function updateBranch(index, key, value) {
             if (!steps[index].branches) {
-                steps[index].branches = {
-                    true: null,
-                    false: null
-                };
+                steps[index].branches = { true: null, false: null };
             }
 
             steps[index].branches[key] = value || null;
 
-            // Auto-reset depends_on branch target ke kosong
             if (value) {
                 const targetStep = steps.find(s => s.id === value);
                 if (targetStep) {
@@ -202,7 +210,6 @@
             syncJSON();
         }
 
-        // ========================= RENDER STEPS (FORM) =========================
         function renderSteps() {
             const container = document.getElementById('steps-container');
             container.innerHTML = '';
@@ -238,9 +245,9 @@
                         <label class="text-xs text-slate-400">Type</label>
                         <select onchange="updateType(${index}, this.value)"
                             class="w-full bg-black/40 text-white p-2 rounded text-sm">
-                            <option value="http"      ${step.type === 'http'      ? 'selected' : ''}>HTTP Call</option>
-                            <option value="script"    ${step.type === 'script'    ? 'selected' : ''}>Script Execution</option>
-                            <option value="delay"     ${step.type === 'delay'     ? 'selected' : ''}>Delay / Wait</option>
+                            <option value="http" ${step.type === 'http' ? 'selected' : ''}>HTTP Call</option>
+                            <option value="script" ${step.type === 'script' ? 'selected' : ''}>Script Execution</option>
+                            <option value="delay" ${step.type === 'delay' ? 'selected' : ''}>Delay / Wait</option>
                             <option value="condition" ${step.type === 'condition' ? 'selected' : ''}>Conditional Branch</option>
                         </select>
                     </div>
@@ -262,9 +269,7 @@
             `;
         }
 
-        // ========================= RENDER CONFIG =========================
         function renderConfig(step, index) {
-
             if (step.type === 'http') {
                 if (!step.config.method) {
                     step.config.method = 'GET';
@@ -283,9 +288,9 @@
                     <label class="text-xs text-slate-400">Method</label>
                     <select onchange="updateConfig(${index}, 'method', this.value)"
                         class="w-full bg-black/40 text-white p-2 rounded text-sm">
-                        <option value="GET"  ${step.config.method === 'GET'  ? 'selected' : ''}>GET</option>
+                        <option value="GET" ${step.config.method === 'GET' ? 'selected' : ''}>GET</option>
                         <option value="POST" ${step.config.method === 'POST' ? 'selected' : ''}>POST</option>
-                        <option value="PUT"  ${step.config.method === 'PUT'  ? 'selected' : ''}>PUT</option>
+                        <option value="PUT" ${step.config.method === 'PUT' ? 'selected' : ''}>PUT</option>
                     </select>
                 </div>
             `;
@@ -366,7 +371,6 @@
             return '';
         }
 
-        // ========================= RENDER PREVIEW =========================
         function renderPreview() {
             const container = document.getElementById('flow-preview');
             container.innerHTML = '';
@@ -389,40 +393,31 @@
                 script: 'border-green-500/40 text-green-400',
             };
 
-            // Tentukan step mana yang branch target
             const branchTargets = {};
             steps.forEach(s => {
                 if (s.type === 'condition') {
-                    if (s.branches?.true) branchTargets[s.branches.true] = {
-                        from: s.id,
-                        side: 'true'
-                    };
-                    if (s.branches?.false) branchTargets[s.branches.false] = {
-                        from: s.id,
-                        side: 'false'
-                    };
+                    if (s.branches?.true) branchTargets[s.branches.true] = { from: s.id, side: 'true' };
+                    if (s.branches?.false) branchTargets[s.branches.false] = { from: s.id, side: 'false' };
                 }
             });
 
-            // Render node
             const renderNode = (step) => {
                 const colors = typeColor[step.type] || 'border-white/20 text-slate-400';
                 const icon = typeIcon[step.type] || '●';
                 return `
                 <div class="flex flex-col items-center">
-                    <div class="border ${colors} bg-black/30 rounded-lg px-3 py-2 text-center min-w-[100px]">
+                    <div class="border ${colors} bg-black/30 rounded-lg px-3 py-2 text-center min-w-30">
                         <div class="text-base">${icon}</div>
                         <div class="text-xs font-semibold text-white mt-1">${step.id}</div>
                         <div class="text-xs text-slate-500">${step.type}</div>
                         ${step.type === 'condition' && step.config.expression
-                            ? `<div class="text-xs text-purple-400 mt-1 font-mono truncate max-w-[120px]">${step.config.expression}</div>`
+                            ? `<div class="text-xs text-purple-400 mt-1 font-mono truncate max-w-30">${step.config.expression}</div>`
                             : ''}
                     </div>
                 </div>
             `;
             };
 
-            // Render arrow
             const arrowDown = `
             <div class="flex justify-center">
                 <div style="width:2px;height:20px;background:rgba(255,255,255,0.15);position:relative;">
@@ -431,7 +426,6 @@
             </div>
         `;
 
-            // Render branch split untuk condition
             const renderBranch = (condStep) => {
                 const trueStep = steps.find(s => s.id === condStep.branches?.true);
                 const falseStep = steps.find(s => s.id === condStep.branches?.false);
@@ -439,7 +433,7 @@
                 if (!trueStep && !falseStep) return '';
 
                 return `
-                <div class="w-full">
+                <div class="w-full mt-3">
                     <svg width="100%" height="40" viewBox="0 0 220 40" preserveAspectRatio="xMidYMid meet">
                         <line x1="110" y1="0" x2="55"  y2="38" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="4,3"/>
                         <line x1="110" y1="0" x2="165" y2="38" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="4,3"/>
@@ -460,19 +454,16 @@
             `;
             };
 
-            // Loop render — skip branch targets (sudah dirender di dalam branch section)
             const rendered = [];
-            steps.forEach((step, i) => {
-                if (branchTargets[step.id]) return; // skip, akan dirender di branch section
+            steps.forEach((step) => {
+                if (branchTargets[step.id]) return;
 
-                // Arrow sebelum node (kecuali pertama)
                 if (rendered.length > 0) {
                     rendered.push(arrowDown);
                 }
 
                 rendered.push(renderNode(step));
 
-                // Kalau condition dan punya branch, render branch section
                 if (step.type === 'condition') {
                     rendered.push(renderBranch(step));
                 }
@@ -481,14 +472,10 @@
             container.innerHTML = rendered.join('');
         }
 
-        // ========================= SYNC JSON =========================
         function syncJSON() {
-            document.getElementById('definition').value = JSON.stringify({
-                steps
-            }, null, 2);
+            document.getElementById('definition').value = JSON.stringify({ steps }, null, 2);
         }
 
-        // ========================= SUBMIT =========================
         async function submitWorkflow() {
             syncJSON();
 
@@ -501,12 +488,12 @@
             };
 
             try {
-                const response = await fetch("{{ route('workflows.store') }}", {
-                    method: "POST",
+                const response = await fetch(`/api/workflows/${WORKFLOW_ID}`, {
+                    method: 'PUT',
                     headers: {
-                        "Content-Type": "application/json",
-                        "Accept": "application/json",
-                        "Authorization": "Bearer " + TOKEN
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'Authorization': 'Bearer ' + TOKEN
                     },
                     body: JSON.stringify(payload)
                 });
@@ -514,16 +501,16 @@
                 const data = await response.json();
                 if (!response.ok) throw data;
 
-                alert("Workflow created successfully!");
-                window.location.href = "/workflows";
-
+                alert('Workflow updated successfully!');
+                window.location.href = `/workflows/${WORKFLOW_ID}`;
             } catch (error) {
                 console.error(error);
-                alert(error.message || "Failed to create workflow");
+                alert(error.message || 'Failed to update workflow');
             }
         }
 
         renderSteps();
         renderPreview();
+        syncJSON();
     </script>
 @endpush

@@ -19,7 +19,7 @@ class WorkflowRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'trigger_type' => 'required|string',
+            'trigger_type' => ['required', 'in:manual,cron,webhook'],
             'cron_expression' => 'nullable|string',
             'definition' => ['required'],
         ];

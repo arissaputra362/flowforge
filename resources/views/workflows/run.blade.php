@@ -301,9 +301,9 @@
 @endpush
 
 @section('header_actions')
-    <a href="/workflows"
-        class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition">
-        List Workflows
+    <a href="/workflows/{{ $workflow->id }}"
+        class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 text-sm font-medium transition">
+        Back to Detail
     </a>
 @endsection
 
@@ -312,7 +312,7 @@
 
         {{-- ═══════════════════════════════════════════
          WORKFLOW INFO HEADER
-    ═══════════════════════════════════════════ --}}
+        ═══════════════════════════════════════════ --}}
         <div class="glass p-6 flex items-center justify-between gap-6">
             <div class="flex items-center gap-4">
                 <div
