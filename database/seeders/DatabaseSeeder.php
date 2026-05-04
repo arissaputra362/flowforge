@@ -17,11 +17,11 @@ class DatabaseSeeder extends Seeder
     {
         // User::factory(10)->create();
 
+        $this->call(RoleSeederr::class);
         User::factory()->create([
             'name' => 'Test User',
             'email' => 'test@example.com',
         ]);
-
         $this->call(TenantSeeder::class);
         $this->call(WorkflowExecutionDemoSeeder::class);
     }

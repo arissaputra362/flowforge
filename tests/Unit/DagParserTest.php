@@ -151,4 +151,66 @@ class DagParserTest extends TestCase
 
         $this->assertSame(['B', 'C'], $nextSteps);
     }
+
+    public function test_root_steps_exclude_condition_branch_targets(): void
+    {
+        $parser = new DagParser();
+
+        $roots = $parser->getRootSteps([
+            'steps' => [
+                [
+                    'id' => 'check',
+                    'type' => 'condition',
+                    'depends_on' => [],
+                    'branches' => [
+                        'true' => 'approve',
+                        'false' => 'reject',
+                    ],
+                ],
+                [
+                    'id' => 'approve',
+                    'type' => 'script',
+                    'depends_on' => [],
+                ],
+                [
+                    'id' => 'reject',
+                    'type' => 'script',
+                    'depends_on' => [],
+                ],
+            ],
+        ]);
+
+        $this->assertSame(['check'], $roots);
+    }
+
+    public function test_next_executable_steps_skip_branch_targets(): void
+    {
+        $parser = new DagParser();
+
+        $nextSteps = $parser->getNextExecutableSteps([
+            'steps' => [
+                [
+                    'id' => 'check',
+                    'type' => 'condition',
+                    'depends_on' => [],
+                    'branches' => [
+                        'true' => 'approve',
+                        'false' => 'reject',
+                    ],
+                ],
+                [
+                    'id' => 'approve',
+                    'type' => 'script',
+                    'depends_on' => [],
+                ],
+                [
+                    'id' => 'reject',
+                    'type' => 'script',
+                    'depends_on' => [],
+                ],
+            ],
+        ], []);
+
+        $this->assertSame(['check'], $nextSteps);
+    }
 }

@@ -38,6 +38,7 @@ class StepFailed implements ShouldBroadcast
             'attempt' => $this->stepRun->attempt,
             'timestamp' => now()->toIso8601String(),
             'error' => $this->error ?? $this->stepRun->last_error,
+            'ai_analysis' => $this->stepRun->ai_analysis,
         ];
     }
 }

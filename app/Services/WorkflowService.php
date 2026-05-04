@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Models\Workflow;
 use App\Services\Workflow\DagParser;
 use App\Repositories\WorkflowRepository;
+use Exception;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class WorkflowService
 {
@@ -21,24 +23,49 @@ class WorkflowService
         return $this->workflowRepository->paginate($tenantId, $perPage);
     }
 
+    public function paginateWithFilters(?string $tenantId, array $filters): LengthAwarePaginator
+    {
+        return $this->workflowRepository->paginateWithFilters($tenantId, $filters);
+    }
+
+    public function baseQuery(?string $tenantId){
+        return $this->workflowRepository->query($tenantId);
+    }
+
     public function findOrFail(string $workflowId, ?string $tenantId = null): Workflow
     {
         return $this->workflowRepository->findOrFail($workflowId, $tenantId);
     }
 
-    public function create(array $data): Workflow
+    public function create($user, array $data): Workflow
     {
-        return DB::transaction(function () use ($data): Workflow {
-            $definition = $this->dagParser->validate($data['definition']);
+        return DB::transaction(function () use ($user, $data): Workflow {
+            $dag = is_array($data['definition'])
+                ? $data['definition']
+                : json_decode($data['definition'], true);
+
+            $definition = $this->dagParser->validate($dag);
+
+            if (isset($data['workflow_timeout_seconds'])) {
+                $definition['workflow_timeout_seconds'] = (int) $data['workflow_timeout_seconds'];
+            }
+
+            $triggerData = [
+                'type' => $data['trigger_type'],
+                'config' => array_filter([
+                    'cron_expression' => $data['cron_expression'] ?? null,
+                ], fn ($value) => $value !== null && $value !== ''),
+            ];
 
             return $this->workflowRepository->create(
                 [
-                    'tenant_id' => $data['tenant_id'],
+                    'tenant_id' => $user->tenant_id,
                     'name' => $data['name'],
                     'description' => $data['description'] ?? null,
                 ],
                 $definition,
                 '1',
+                $triggerData,
             );
         });
     }
@@ -46,17 +73,38 @@ class WorkflowService
     public function update(Workflow $workflow, array $data): Workflow
     {
         return DB::transaction(function () use ($workflow, $data): Workflow {
-            $definition = $this->dagParser->validate($data['definition']);
+            $definition = is_array($data['definition'])
+                ? $data['definition']
+                : json_decode($data['definition'], true);
+
+            if (! is_array($definition)) {
+                throw new Exception('Invalid workflow definition payload.');
+            }
+
+            $definition = $this->dagParser->validate($definition);
+
+            if (isset($data['workflow_timeout_seconds'])) {
+                $definition['workflow_timeout_seconds'] = (int) $data['workflow_timeout_seconds'];
+            }
+
+            $triggerData = [
+                'type' => $data['trigger_type'],
+                'config' => array_filter([
+                    'cron_expression' => $data['cron_expression'] ?? null,
+                ], fn ($value) => $value !== null && $value !== ''),
+            ];
 
             return $this->workflowRepository->update(
                 $workflow,
                 [
-                    'tenant_id' => $data['tenant_id'],
                     'name' => $data['name'],
                     'description' => $data['description'] ?? null,
                 ],
                 $definition,
+                $triggerData,
             );
         });
     }
+
+
 }

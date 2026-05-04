@@ -11,21 +11,22 @@ class WorkflowRequest extends FormRequest
 {
     public function authorize(): bool
     {
+        // Don't allow tenant_id to be overridden in request
+        // Force it to be the user's tenant
+        $this->merge(['tenant_id' => $this->user()->tenant_id]);
+
         return true;
     }
 
     public function rules(): array
     {
         return [
-            'tenant_id' => ['required', 'uuid', Rule::exists('tenants', 'id')],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'definition' => ['required', 'array'],
-            'definition.steps' => ['required', 'array', 'min:1'],
-            'definition.steps.*.id' => ['required', 'string', 'max:255'],
-            'definition.steps.*.type' => ['required', 'string', 'max:255'],
-            'definition.steps.*.depends_on' => ['sometimes', 'array'],
-            'definition.steps.*.depends_on.*' => ['string', 'max:255'],
+            'trigger_type' => ['required', 'in:manual,cron,webhook'],
+            'cron_expression' => 'nullable|string',
+            'workflow_timeout_seconds' => ['nullable', 'integer', 'min:1', 'max:86400'],
+            'definition' => ['required'],
         ];
     }
 

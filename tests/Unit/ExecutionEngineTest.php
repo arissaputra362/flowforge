@@ -11,11 +11,12 @@ use App\Services\ExecutionService;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 class ExecutionEngineTest extends TestCase
 {
-    use DatabaseTransactions;
+    use RefreshDatabase;
+
     public function test_initialize_run_creates_step_runs_and_dispatches_root_steps()
     {
         Bus::fake();
@@ -55,6 +56,7 @@ class ExecutionEngineTest extends TestCase
 
         Bus::assertDispatched(RunStepJob::class, function ($job) use ($workflowRun) {
             $stepRun = StepRun::find($job->stepRunId);
+
             return $stepRun && $stepRun->step_id === 'A';
         });
     }
@@ -98,6 +100,7 @@ class ExecutionEngineTest extends TestCase
 
         Bus::assertDispatched(RunStepJob::class, function ($job) use ($workflowRun) {
             $stepRun = StepRun::find($job->stepRunId);
+
             return $stepRun && $stepRun->step_id === 'B';
         });
     }

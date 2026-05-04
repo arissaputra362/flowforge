@@ -29,13 +29,19 @@ class StepSucceeded implements ShouldBroadcast
 
     public function broadcastWith(): array
     {
+        $output = $this->stepRun->output;
+    
+        // Trim body jika terlalu besar
+        if (isset($output['body']) && strlen($output['body']) > 500) {
+            $output['body'] = substr($output['body'], 0, 500) . '...[truncated]';
+        }
+
         return [
-            'step_id' => $this->stepRun->step_id,
-            'step_run_id' => (string) $this->stepRun->id,
-            'status' => $this->stepRun->status,
-            'attempt' => $this->stepRun->attempt,
-            'timestamp' => now()->toIso8601String(),
-            'output' => $this->stepRun->output,
+            'step_id'    => $this->stepRun->step_id,
+            'status'     => $this->stepRun->status,
+            'output'     => $output,
+            'attempt'    => $this->stepRun->attempt,
+            'timestamp'  => now()->toIso8601String(),
         ];
     }
 }

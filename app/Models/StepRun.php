@@ -27,11 +27,13 @@ class StepRun extends Model
         'output',
         'started_at',
         'finished_at',
+        'ai_analysis',
     ];
 
     protected $casts = [
         'input' => 'array',
         'output' => 'array',
+        'ai_analysis' => 'array',
         'last_error' => 'string',
         'started_at' => 'datetime',
         'finished_at' => 'datetime',

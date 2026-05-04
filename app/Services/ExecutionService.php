@@ -8,6 +8,7 @@ use App\Models\WorkflowRun;
 use App\Models\WorkflowVersion;
 use App\Repositories\WorkflowRepository;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ExecutionService
 {
@@ -34,11 +35,16 @@ class ExecutionService
         $rootSteps = $dag['root_steps'] ?? [];
 
         foreach ($rootSteps as $stepId) {
-            $stepRun = StepRun::where('workflow_run_id', $workflowRun->id)
+            $affected = StepRun::where('workflow_run_id', $workflowRun->id)
                 ->where('step_id', $stepId)
-                ->first();
+                ->where('status', 'pending')  // ← guard: hanya dispatch jika masih pending
+                ->update(['status' => 'queued']);
 
-            if ($stepRun) {
+            if ($affected > 0) {
+                $stepRun = StepRun::where('workflow_run_id', $workflowRun->id)
+                    ->where('step_id', $stepId)
+                    ->first();
+
                 RunStepJob::dispatch($stepRun->id);
             }
         }
@@ -83,8 +89,17 @@ class ExecutionService
     public function executeStepAttempt(string $stepRunId, int $maxAttempts): void
     {
         $stepRun = StepRun::findOrFail($stepRunId);
+        if (!in_array($stepRun->status, ['queued', 'pending', 'running'])) {
+            return;
+        }
 
         $workflowRun = $stepRun->workflowRun;
+        $logger = app(\App\Services\LogService::class);
+
+        if ($this->hasWorkflowTimedOut($workflowRun)) {
+            $this->markWorkflowTimedOut($workflowRun);
+            return;
+        }
 
         if ($this->hasUnfinishedDependencies($workflowRun, $stepRun)) {
             // caller should release the job for retry
@@ -94,6 +109,8 @@ class ExecutionService
         // increment attempt atomically
         $stepRun->increment('attempt');
         $stepRun->refresh();
+
+        $logger->info($stepRun, 'Step started');
 
         $stepRun->update([
             'status' => 'running',
@@ -106,7 +123,11 @@ class ExecutionService
         try {
             $definition = $this->getStepDefinition($workflowRun, $stepRun->step_id);
 
-            $output = \App\Services\Execution\StepExecutorFactory::execute($definition, $stepRun->input ?? []);
+            $context = $this->buildStepContext($workflowRun, $stepRun);
+
+            $output = \App\Services\Execution\StepExecutorFactory::execute($definition, $context);
+
+            $logger->info($stepRun, 'Step succeeded', ['output' => $output]);
 
             $stepRun->update([
                 'status' => 'success',
@@ -120,6 +141,8 @@ class ExecutionService
             $this->dispatchNextSteps($workflowRun, $stepRun);
 
         } catch (\Throwable $e) {
+            $logger->error($stepRun, 'Step failed', ['error' => $e->getMessage()]);
+
             // record error
             $stepRun->update([
                 'last_error' => (string) $e->getMessage(),
@@ -127,33 +150,80 @@ class ExecutionService
 
             $retrySvc = new \App\Services\Execution\RetryService();
 
+                Log::debug('CATCH BLOCK HIT', [
+                'error' => $e->getMessage(),
+                'attempt' => $stepRun->attempt,
+                'maxAttempts' => $maxAttempts,
+                'isRetryable' => $retrySvc->isRetryable($e),
+            ]);
+
             if (! $retrySvc->isRetryable($e)) {
+                $aiSvc = app(\App\Services\AI\FailureAnalyzerService::class);
+                $analysis = $aiSvc->analyze($stepRun);
+
                 $stepRun->update([
                     'status' => 'failed',
                     'finished_at' => now(),
+                    'ai_analysis' => $analysis,
                 ]);
 
                 // broadcast failure
                 event(new \App\Events\StepFailed($stepRun, $e->getMessage()));
-
+                $this->markWorkflowFailed($workflowRun);
+                $this->checkAndCompleteWorkflow($workflowRun);
                 return;
             }
 
             if ($stepRun->attempt >= $maxAttempts) {
+                $aiSvc = app(\App\Services\AI\FailureAnalyzerService::class);
+                $analysis = $aiSvc->analyze($stepRun);
+
                 $stepRun->update([
                     'status' => 'failed',
                     'finished_at' => now(),
+                    'ai_analysis' => $analysis,
                 ]);
 
                 // broadcast failure when retry limit is reached
                 event(new \App\Events\StepFailed($stepRun, $e->getMessage()));
-
+                $this->markWorkflowFailed($workflowRun);
+                $this->checkAndCompleteWorkflow($workflowRun);
                 return;
             }
+
+            // Di blok catch, sebelum rethrow
+            $stepRun->update([
+                'status' => 'queued', // reset agar bisa diproses ulang
+                'started_at' => null,
+            ]);
 
             // rethrow to allow queue retry/backoff
             throw $e;
         }
+    }
+
+    /**
+     * Build context untuk executor: initial input + semua output step yang sudah success.
+     */
+    private function buildStepContext(WorkflowRun $workflowRun, StepRun $currentStepRun): array
+    {
+        $completedSteps = StepRun::where('workflow_run_id', $workflowRun->id)
+            ->where('status', 'success')
+            ->whereNotNull('output')
+            ->get(['step_id', 'output']);
+
+        $stepsOutput = [];
+
+        foreach ($completedSteps as $step) {
+            $stepsOutput[(string) $step->step_id] = [
+                'output' => $step->output,
+            ];
+        }
+
+        return [
+            'input' => $currentStepRun->input ?? [],
+            'steps' => $stepsOutput,
+        ];
     }
 
     /**
@@ -181,7 +251,7 @@ class ExecutionService
 
         $exists = StepRun::where('workflow_run_id', $workflowRun->id)
             ->whereIn('step_id', $dependsOn)
-            ->where('status', '!=', 'success')
+            ->whereNotIn('status', ['success', 'skipped'])  // queued/running/pending = belum selesai
             ->exists();
 
         return $exists;
@@ -203,43 +273,188 @@ class ExecutionService
      */
     public function dispatchNextSteps(WorkflowRun $workflowRun, StepRun $completedStepRun): void
     {
-        $version = $workflowRun->workflowVersion;
+        if ($this->hasWorkflowTimedOut($workflowRun)) {
+            $this->markWorkflowTimedOut($workflowRun);
+            return;
+        }
 
-        $definition = $version->definition ?? $version->dag;
+        $version     = $workflowRun->workflowVersion;
+        $definition  = $version->definition ?? $version->dag;
+        $stepDef     = $this->getStepDefinition($workflowRun, $completedStepRun->step_id);
 
-        $completed = StepRun::where('workflow_run_id', $workflowRun->id)
-            ->where('status', 'success')
+        // --- BRANCH ROUTING untuk condition step ---
+        if (($stepDef['type'] ?? null) === 'condition') {
+            $this->handleConditionBranch($workflowRun, $completedStepRun, $stepDef, $definition);
+        } else {
+            // --- NORMAL: dispatch berdasarkan depends_on ---
+            $this->dispatchByDependencies($workflowRun, $definition);
+        }
+
+        $this->checkAndCompleteWorkflow($workflowRun);
+    }
+
+    /**
+     * Handle branch routing setelah condition step selesai.
+     */
+    private function handleConditionBranch(
+        WorkflowRun $workflowRun,
+        StepRun $completedStepRun,
+        array $stepDef,
+        array $definition
+    ): void {
+        $output        = $completedStepRun->output ?? [];
+        $branch        = $output['branch'] ?? 'false';
+        $branches      = $stepDef['branches'] ?? [];
+        $chosenStepId  = $branches[$branch] ?? null;
+        $rejectedStepId = $branches[$branch === 'true' ? 'false' : 'true'] ?? null;
+
+        // Mark rejected sebagai skipped
+        if ($rejectedStepId) {
+            $affected = StepRun::where('workflow_run_id', $workflowRun->id)
+                ->where('step_id', $rejectedStepId)
+                ->whereIn('status', ['pending', 'queued']) // ← guard queued juga
+                ->update([
+                    'status'      => 'skipped',
+                    'finished_at' => now(),
+                ]);
+
+            if ($affected > 0) {
+                $rejectedRun = StepRun::where('workflow_run_id', $workflowRun->id)
+                    ->where('step_id', $rejectedStepId)
+                    ->first();
+
+                event(new \App\Events\StepSkipped($rejectedRun));
+            }
+        }
+
+        // Dispatch chosen — atomic
+        if ($chosenStepId) {
+            $affected = StepRun::where('workflow_run_id', $workflowRun->id)
+                ->where('step_id', $chosenStepId)
+                ->where('status', 'pending')
+                ->update(['status' => 'queued']);
+
+            if ($affected > 0) {
+                $chosenRun = StepRun::where('workflow_run_id', $workflowRun->id)
+                    ->where('step_id', $chosenStepId)
+                    ->first();
+
+                RunStepJob::dispatch($chosenRun->id);
+            }
+        }
+    }
+
+    /**
+     * Dispatch steps yang depends_on-nya sudah semua selesai (success/skipped).
+     */
+    private function dispatchByDependencies(WorkflowRun $workflowRun, array $definition): void
+    {
+        $satisfied = StepRun::where('workflow_run_id', $workflowRun->id)
+            ->whereIn('status', ['success', 'skipped'])
             ->pluck('step_id')
-            ->map(fn ($v) => (string) $v)
+            ->map(fn($v) => (string) $v)
             ->toArray();
 
         $parser = new \App\Services\Workflow\DagParser();
-
-        $next = $parser->getNextExecutableSteps($definition, $completed);
+        $next   = $parser->getNextExecutableSteps($definition, $satisfied);
 
         foreach ($next as $stepId) {
-            $stepRun = StepRun::where('workflow_run_id', $workflowRun->id)
+            $affected = StepRun::where('workflow_run_id', $workflowRun->id)
                 ->where('step_id', $stepId)
-                ->first();
+                ->where('status', 'pending')
+                ->update(['status' => 'queued']);
 
-            if ($stepRun && $stepRun->status === 'pending') {
+            if ($affected > 0) {
+                // Hanya dispatch kalau kita yang berhasil update
+                $stepRun = StepRun::where('workflow_run_id', $workflowRun->id)
+                    ->where('step_id', $stepId)
+                    ->first();
+
                 RunStepJob::dispatch($stepRun->id);
             }
         }
+    }
 
-        // Check whether the workflow is completed (no pending/running steps)
-        $unfinished = StepRun::where('workflow_run_id', $workflowRun->id)
-            ->whereIn('status', ['pending', 'running'])
+    /**
+     * Cek apakah semua step sudah selesai, lalu complete workflow.
+     */
+    public function checkAndCompleteWorkflow(WorkflowRun $workflowRun): void
+    {
+        if ($this->hasWorkflowTimedOut($workflowRun)) {
+            $this->markWorkflowTimedOut($workflowRun);
+            return;
+        }
+
+         $unfinished = StepRun::where('workflow_run_id', $workflowRun->id)
+            ->whereIn('status', ['pending', 'queued', 'running'])
             ->exists();
 
-        if (! $unfinished) {
-            // mark workflow run completed if not already
+        if (!$unfinished) {
             $workflowRun->refresh();
 
-            if ($workflowRun->status !== 'completed') {
-                $workflowRun->update(['status' => 'completed']);
-                event(new \App\Events\WorkflowCompleted($workflowRun));
+            $hasFailed = StepRun::where('workflow_run_id', $workflowRun->id)
+                ->where('status', 'failed')
+                ->exists();
+
+            if ($hasFailed) {
+                if ($workflowRun->status !== 'failed') {
+                    $workflowRun->update(['status' => 'failed']);
+                    event(new \App\Events\WorkflowFailed($workflowRun));
+                }
+            } else {
+                if ($workflowRun->status !== 'completed') {
+                    $workflowRun->update(['status' => 'completed']);
+                    event(new \App\Events\WorkflowCompleted($workflowRun));
+                }
             }
         }
+    }
+
+    private function markWorkflowFailed(WorkflowRun $workflowRun): void
+    {
+        if ($workflowRun->status !== 'failed') {
+            $workflowRun->update(['status' => 'failed']);
+            event(new \App\Events\WorkflowFailed($workflowRun));
+        }
+    }
+
+    public function hasWorkflowTimedOut(WorkflowRun $workflowRun): bool
+    {
+        if (! in_array($workflowRun->status, ['pending', 'queued', 'running'], true)) {
+            return false;
+        }
+
+        $definition = $workflowRun->workflowVersion?->definition ?? [];
+        $timeoutSeconds = (int) ($definition['workflow_timeout_seconds'] ?? 300);
+
+        return $workflowRun->created_at !== null
+            && $workflowRun->created_at->copy()->addSeconds($timeoutSeconds)->isPast();
+    }
+
+    public function markWorkflowTimedOut(WorkflowRun $workflowRun): void
+    {
+        $workflowRun->refresh();
+
+        if ($workflowRun->status === 'failed') {
+            return;
+        }
+
+        StepRun::where('workflow_run_id', $workflowRun->id)
+            ->whereIn('status', ['pending', 'queued', 'running'])
+            ->update([
+                'status' => 'failed',
+                'last_error' => 'Workflow timed out',
+                'finished_at' => now(),
+            ]);
+
+        $workflowRun->update([
+            'status' => 'failed',
+            'output' => [
+                'error' => 'Workflow timed out',
+                'timeout_seconds' => (int) (($workflowRun->workflowVersion?->definition ?? [])['workflow_timeout_seconds'] ?? 300),
+            ],
+        ]);
+
+        event(new \App\Events\WorkflowFailed($workflowRun));
     }
 }
