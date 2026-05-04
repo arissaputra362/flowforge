@@ -25,7 +25,8 @@
                 <div>
                     <label class="block text-sm font-medium text-slate-300 mb-2">Trigger Type</label>
                     <select name="trigger_type" id="trigger_type"
-                        class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white">
+                        class="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white
+           [&>option]:bg-slate-800 [&>option]:text-white">
                         <option value="manual">Manual</option>
                         <option value="cron">Scheduled (Cron)</option>
                         <option value="webhook">Webhook</option>

@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', 'Register')
-@section('meta_description', 'Create your FlowForge workspace')
+@section('title', 'Login')
+@section('meta_description', 'Login your FlowForge workspace')
 
 @section('content')
     <div class="flex items-center justify-center min-h-screen fade-in">

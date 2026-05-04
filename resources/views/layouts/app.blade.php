@@ -86,6 +86,11 @@
         .ts-control .item {
             color: #e2e8f0;
         }
+
+        select option {
+            background-color: #1e293b; /* slate-800 */
+            color: #f1f5f9;            /* slate-100 */
+        }
     </style>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @stack('styles')

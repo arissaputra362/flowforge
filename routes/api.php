@@ -43,6 +43,13 @@ Route::prefix('mock')->group(function () {
             $stock = rand(0, 10);
         }
 
+        if ($request->input('stock') <= 0) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Inventory stock not found'
+            ], 400);
+        }
+
         // simulate failure
         if ($request->input('fail') == true) {
             return response()->json([

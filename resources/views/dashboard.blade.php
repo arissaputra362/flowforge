@@ -10,10 +10,12 @@
         class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 text-sm font-medium transition">
         View Workflows
     </a>
+    @hasanyrole('admin|editor')
     <a href="{{ route('webworkflows.create') }}"
         class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition">
         + New Workflow
     </a>
+    @endhasanyrole
 @endsection
 
 @push('styles')

@@ -23,32 +23,55 @@ class ConditionStepExecutor
 
     private static function evaluate(string $expression, array $context): bool
     {
-        // Build normalized lookup: 'step_1' → 'step1', 'my_step' → 'mystep'
         $stepsOutput = $context['steps'] ?? [];
         $normalizedSteps = [];
 
         foreach ($stepsOutput as $stepId => $data) {
-            $normalizedKey = str_replace('_', '', $stepId); // 'step_1' → 'step1'
+            $normalizedKey = str_replace('_', '', $stepId);
             $normalizedSteps[$normalizedKey] = $data;
         }
 
-        // Pattern: step.<step_id>.output.<field> <op> <value>
+        // Pattern: step.<step_id>.output.<field.nested.path> <op> <value>
+        // Contoh: step.step1.output.body.stock > 0
+        //         step.step1.output.status == 200
+        //         step.step1.output.body.available == true
         if (preg_match(
-            '/^step\.(\w+)\.output\.(\w+)\s*(>=|<=|==|!=|=|>|<)\s*(.+)$/',
+            '/^step\.(\w+)\.output\.([\w.]+)\s*(>=|<=|==|!=|=|>|<)\s*(.+)$/',
             trim($expression),
             $matches
         )) {
-            [, $stepId, $field, $operator, $rawValue] = $matches;
+            [, $stepId, $fieldPath, $operator, $rawValue] = $matches;
 
             $lookupStepId = str_replace('_', '', $stepId);
 
-            // lookup ke normalizedSteps yang key-nya juga sudah tanpa underscore
-            $actual = $normalizedSteps[$lookupStepId]['output'][$field] ?? null;
+            $outputData = $normalizedSteps[$lookupStepId]['output'] ?? null;
+
+            // Traverse nested path: "body.stock" → $output['body']['stock']
+            $actual = self::getNestedValue($outputData, $fieldPath);
 
             return self::compare($actual, $operator, self::castValue(trim($rawValue)));
         }
 
         return false;
+    }
+
+    /**
+     * Ambil nilai nested dari array menggunakan dot notation.
+     * Contoh: getNestedValue(['body' => ['stock' => 5]], 'body.stock') → 5
+     */
+    private static function getNestedValue(mixed $data, string $path): mixed
+    {
+        $keys = explode('.', $path);
+
+        foreach ($keys as $key) {
+            if (is_array($data) && array_key_exists($key, $data)) {
+                $data = $data[$key];
+            } else {
+                return null;
+            }
+        }
+
+        return $data;
     }
 
     private static function castValue(string $value): mixed

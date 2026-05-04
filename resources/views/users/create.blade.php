@@ -60,7 +60,8 @@
                 {{-- Role --}}
                 <div>
                     <label class="text-sm text-slate-400">Role</label>
-                    <select name="role" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white">
+                    <select name="role" class="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white
+           [&>option]:bg-slate-800 [&>option]:text-white">
                         <option value="admin">Admin</option>
                         <option value="editor">Editor</option>
                         <option value="viewer">Viewer</option>

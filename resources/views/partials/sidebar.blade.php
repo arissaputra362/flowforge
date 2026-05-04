@@ -46,11 +46,11 @@
             </div>
         </div>
 
+        @role('admin')
         {{-- Management --}}
         <div>
             <p class="px-4 text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-4">Management</p>
             <div class="space-y-1">
-                @role('admin')
                     <a href="{{ route('webusers.index') }}"
                         class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-slate-400 font-medium transition-all hover:bg-white/5 hover:text-white {{ request()->is('users*') ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/10' : '' }}">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -59,9 +59,9 @@
                         </svg>
                         Users
                     </a>
-                @endrole
-            </div>
+                </div>
         </div>
+        @endrole
     </nav>
 
     {{-- User --}}
