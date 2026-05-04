@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\StepRun;
 use App\Services\ExecutionService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -62,5 +63,35 @@ class RunStepJob implements ShouldQueue
         if ($acquired === null) {
             $this->release(5);
         }
+    }
+
+    public function failed(\Throwable $exception): void
+    {
+        $stepRun = StepRun::find($this->stepRunId);
+        if (!$stepRun) return;
+
+        // Jika sudah failed/success, jangan proses lagi
+        if (in_array($stepRun->status, ['failed', 'success', 'skipped'])) {
+            // Tetap cek workflow completion kalau belum complete
+            app(\App\Services\ExecutionService::class)
+                ->checkAndCompleteWorkflow($stepRun->workflowRun);
+            return;
+        }
+
+        $aiSvc = app(\App\Services\AI\FailureAnalyzerService::class);
+        $analysis = $aiSvc->analyze($stepRun);
+
+        $stepRun->update([
+            'status'      => 'failed',
+            'finished_at' => now(),
+            'last_error'  => $exception->getMessage(),
+            'ai_analysis' => $analysis,
+        ]);
+
+        event(new \App\Events\StepFailed($stepRun, $exception->getMessage()));
+
+        // trigger cek workflow completion
+        app(\App\Services\ExecutionService::class)
+            ->checkAndCompleteWorkflow($stepRun->workflowRun);
     }
 }

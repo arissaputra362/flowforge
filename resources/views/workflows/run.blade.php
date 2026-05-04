@@ -300,6 +300,13 @@
     </style>
 @endpush
 
+@section('header_actions')
+    <a href="/workflows"
+        class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition">
+        List Workflows
+    </a>
+@endsection
+
 @section('content')
     <div class="max-w-6xl mx-auto space-y-8 fade-in">
 
@@ -445,7 +452,8 @@
                         <div id="detailErrorBox" class="hidden">
                             <p class="text-slate-500 text-xs mb-2">Error</p>
                             <div class="bg-red-500/8 border border-red-500/20 rounded-lg p-3">
-                                <p id="detailError" class="text-red-400 text-xs font-mono"></p>
+                                <p id="detailError" class="text-red-400 text-xs font-mono break-all whitespace-pre-wrap">
+                                </p>
                             </div>
                         </div>
                         <div id="detailAiBox" class="hidden">
@@ -669,6 +677,13 @@
                 appendLog('success', `🎉 Workflow completed!`);
                 stopTimer();
                 setRunning(false);
+            });
+
+            channel.bind('App\\Events\\WorkflowFailed', () => {
+                setWorkflowStatus('failed');
+                appendLog('error', `✗ Workflow failed.`);
+                stopTimer();
+                setRunning(false); // ← tombol Run aktif lagi
             });
         }
 

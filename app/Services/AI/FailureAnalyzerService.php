@@ -19,9 +19,12 @@ class FailureAnalyzerService
 
     public function analyze(StepRun $stepRun): array
     {
+        
+        \Log::debug("ANALIZE GEMINI");
         $prompt = $this->promptBuilder->build($stepRun);
-        $apiKey = config('services.gemini.key', env('GEMINI_API_KEY'));
+        $apiKey = config('services.gemini.api_key');
 
+        \Log::debug("GEMINI_API_KEY");
         \Log::debug($apiKey);
         if (empty($apiKey)) {
             return $this->fallback('Gemini API key is not configured.');

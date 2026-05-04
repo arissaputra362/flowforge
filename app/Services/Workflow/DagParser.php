@@ -50,7 +50,22 @@ class DagParser
     {
         $steps = $this->normalizeSteps($definition);
 
-        return array_values(array_keys(array_filter($steps, static fn (array $step): bool => $step['depends_on'] === [])));
+        // Kumpulkan semua branch target dari condition steps
+        $branchTargets = [];
+        foreach ($steps as $step) {
+            if (($step['type'] ?? '') === 'condition') {
+                $branches = $step['branches'] ?? [];
+                if (!empty($branches['true']))  $branchTargets[] = $branches['true'];
+                if (!empty($branches['false'])) $branchTargets[] = $branches['false'];
+            }
+        }
+
+        return array_values(array_keys(array_filter(
+            $steps,
+            fn(array $step): bool =>
+                $step['depends_on'] === [] &&
+                !in_array($step['id'], $branchTargets) // ← tambah ini
+        )));
     }
 
     /**
@@ -66,18 +81,28 @@ class DagParser
         $this->assertDependenciesExist($steps);
         $this->assertNoCycles($steps);
 
+        // Kumpulkan branch targets — tidak boleh di-dispatch oleh dependency resolver
+        $branchTargets = [];
+        foreach ($steps as $step) {
+            if (($step['type'] ?? '') === 'condition') {
+                $branches = $step['branches'] ?? [];
+                if (!empty($branches['true']))  $branchTargets[] = $branches['true'];
+                if (!empty($branches['false'])) $branchTargets[] = $branches['false'];
+            }
+        }
+
         $completedLookup = array_fill_keys(array_map('strval', $completedSteps), true);
         $nextExecutable = [];
 
         foreach ($this->topologicalSort($steps) as $stepId) {
-            if (isset($completedLookup[$stepId])) {
-                continue;
-            }
+            if (isset($completedLookup[$stepId])) continue;
+
+            // Skip branch target — dikontrol oleh handleConditionBranch
+            if (in_array($stepId, $branchTargets)) continue;
 
             $dependenciesSatisfied = true;
-
             foreach ($steps[$stepId]['depends_on'] as $dependency) {
-                if (! isset($completedLookup[$dependency])) {
+                if (!isset($completedLookup[$dependency])) {
                     $dependenciesSatisfied = false;
                     break;
                 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Services\WorkflowService;
 use App\Services\ExecutionService;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 
@@ -43,7 +44,7 @@ class WebWorkflowController extends Controller
             'definition' => 'required|json',
         ]);
 
-        $workflow = $this->workflowService->create($data);
+        $workflow = $this->workflowService->create($request->user(), $data);
 
         return redirect()->route('workflows.show', $workflow->id);
     }
@@ -54,7 +55,7 @@ class WebWorkflowController extends Controller
         $runs = $workflow->runs()
             ->withCount('stepRuns')
             ->orderByDesc('created_at')
-            ->paginate(10);
+            ->get();
 
         return view('workflows.show', [
             'workflow' => $workflow,

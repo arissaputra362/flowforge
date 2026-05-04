@@ -34,18 +34,18 @@ class ConditionStepExecutor
 
         // Pattern: step.<step_id>.output.<field> <op> <value>
         if (preg_match(
-            '/^step\.(\w+)\.output\.(\w+)\s*(=|==|!=|>|<|>=|<=)\s*(.+)$/',
+            '/^step\.(\w+)\.output\.(\w+)\s*(>=|<=|==|!=|=|>|<)\s*(.+)$/',
             trim($expression),
             $matches
         )) {
             [, $stepId, $field, $operator, $rawValue] = $matches;
 
-            // $stepId dari expression sudah tanpa underscore: 'step1'
-            // lookup ke normalizedSteps yang key-nya juga sudah tanpa underscore
-            $actual   = $normalizedSteps[$stepId]['output'][$field] ?? null;
-            $expected = self::castValue(trim($rawValue));
+            $lookupStepId = str_replace('_', '', $stepId);
 
-            return self::compare($actual, $operator, $expected);
+            // lookup ke normalizedSteps yang key-nya juga sudah tanpa underscore
+            $actual = $normalizedSteps[$lookupStepId]['output'][$field] ?? null;
+
+            return self::compare($actual, $operator, self::castValue(trim($rawValue)));
         }
 
         return false;

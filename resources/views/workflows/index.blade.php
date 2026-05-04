@@ -86,11 +86,6 @@
                                class="px-3 py-1 rounded bg-white/5 hover:bg-white/10 text-xs">
                                 View
                             </a>
-
-                            <a href="/workflows/${id}/run"
-                                class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs">
-                                ▶ Run
-                            </a>
                         </div>
                     `;
                         }

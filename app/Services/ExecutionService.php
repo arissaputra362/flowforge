@@ -8,6 +8,7 @@ use App\Models\WorkflowRun;
 use App\Models\WorkflowVersion;
 use App\Repositories\WorkflowRepository;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ExecutionService
 {
@@ -34,11 +35,16 @@ class ExecutionService
         $rootSteps = $dag['root_steps'] ?? [];
 
         foreach ($rootSteps as $stepId) {
-            $stepRun = StepRun::where('workflow_run_id', $workflowRun->id)
+            $affected = StepRun::where('workflow_run_id', $workflowRun->id)
                 ->where('step_id', $stepId)
-                ->first();
+                ->where('status', 'pending')  // ← guard: hanya dispatch jika masih pending
+                ->update(['status' => 'queued']);
 
-            if ($stepRun) {
+            if ($affected > 0) {
+                $stepRun = StepRun::where('workflow_run_id', $workflowRun->id)
+                    ->where('step_id', $stepId)
+                    ->first();
+
                 RunStepJob::dispatch($stepRun->id);
             }
         }
@@ -83,7 +89,7 @@ class ExecutionService
     public function executeStepAttempt(string $stepRunId, int $maxAttempts): void
     {
         $stepRun = StepRun::findOrFail($stepRunId);
-        if (!in_array($stepRun->status, ['queued', 'pending'])) {
+        if (!in_array($stepRun->status, ['queued', 'pending', 'running'])) {
             return;
         }
 
@@ -139,6 +145,13 @@ class ExecutionService
 
             $retrySvc = new \App\Services\Execution\RetryService();
 
+                Log::debug('CATCH BLOCK HIT', [
+                'error' => $e->getMessage(),
+                'attempt' => $stepRun->attempt,
+                'maxAttempts' => $maxAttempts,
+                'isRetryable' => $retrySvc->isRetryable($e),
+            ]);
+
             if (! $retrySvc->isRetryable($e)) {
                 $aiSvc = app(\App\Services\AI\FailureAnalyzerService::class);
                 $analysis = $aiSvc->analyze($stepRun);
@@ -151,7 +164,8 @@ class ExecutionService
 
                 // broadcast failure
                 event(new \App\Events\StepFailed($stepRun, $e->getMessage()));
-
+                $this->markWorkflowFailed($workflowRun);
+                $this->checkAndCompleteWorkflow($workflowRun);
                 return;
             }
 
@@ -167,9 +181,16 @@ class ExecutionService
 
                 // broadcast failure when retry limit is reached
                 event(new \App\Events\StepFailed($stepRun, $e->getMessage()));
-
+                $this->markWorkflowFailed($workflowRun);
+                $this->checkAndCompleteWorkflow($workflowRun);
                 return;
             }
+
+            // Di blok catch, sebelum rethrow
+            $stepRun->update([
+                'status' => 'queued', // reset agar bisa diproses ulang
+                'started_at' => null,
+            ]);
 
             // rethrow to allow queue retry/backoff
             throw $e;
@@ -347,19 +368,38 @@ class ExecutionService
     /**
      * Cek apakah semua step sudah selesai, lalu complete workflow.
      */
-    private function checkAndCompleteWorkflow(WorkflowRun $workflowRun): void
+    public function checkAndCompleteWorkflow(WorkflowRun $workflowRun): void
     {
-        $unfinished = StepRun::where('workflow_run_id', $workflowRun->id)
-            ->whereIn('status', ['pending', 'queued', 'running']) // ← tambah queued
+         $unfinished = StepRun::where('workflow_run_id', $workflowRun->id)
+            ->whereIn('status', ['pending', 'queued', 'running'])
             ->exists();
 
-        if (! $unfinished) {
+        if (!$unfinished) {
             $workflowRun->refresh();
 
-            if ($workflowRun->status !== 'completed') {
-                $workflowRun->update(['status' => 'completed']);
-                event(new \App\Events\WorkflowCompleted($workflowRun));
+            $hasFailed = StepRun::where('workflow_run_id', $workflowRun->id)
+                ->where('status', 'failed')
+                ->exists();
+
+            if ($hasFailed) {
+                if ($workflowRun->status !== 'failed') {
+                    $workflowRun->update(['status' => 'failed']);
+                    event(new \App\Events\WorkflowFailed($workflowRun));
+                }
+            } else {
+                if ($workflowRun->status !== 'completed') {
+                    $workflowRun->update(['status' => 'completed']);
+                    event(new \App\Events\WorkflowCompleted($workflowRun));
+                }
             }
+        }
+    }
+
+    private function markWorkflowFailed(WorkflowRun $workflowRun): void
+    {
+        if ($workflowRun->status !== 'failed') {
+            $workflowRun->update(['status' => 'failed']);
+            event(new \App\Events\WorkflowFailed($workflowRun));
         }
     }
 }
