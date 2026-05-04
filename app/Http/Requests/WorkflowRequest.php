@@ -11,6 +11,10 @@ class WorkflowRequest extends FormRequest
 {
     public function authorize(): bool
     {
+        // Don't allow tenant_id to be overridden in request
+        // Force it to be the user's tenant
+        $this->merge(['tenant_id' => $this->user()->tenant_id]);
+
         return true;
     }
 

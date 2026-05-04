@@ -6,13 +6,16 @@ use App\Http\Requests\WorkflowRequest;
 use App\Models\Workflow;
 use App\Services\ExecutionService;
 use App\Services\WorkflowService;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Yajra\DataTables\Facades\DataTables;
 
 class WorkflowController extends Controller
 {
+    use AuthorizesRequests;
     public function __construct(private readonly WorkflowService $workflowService)
     {
     }
@@ -27,7 +30,7 @@ class WorkflowController extends Controller
         // return response()->json($workflows);
 
         $user = $request->user();
-        \Log::debug(json_encode($user));
+        Log::debug(json_encode($user));
 
         $query = $this->workflowService->baseQuery(
             $user->tenant_id ?? null,
@@ -42,12 +45,12 @@ class WorkflowController extends Controller
                 }
             })
             ->make(true);
-        
+
     }
 
     public function store(WorkflowRequest $request): JsonResponse
     {
-        \Log::debug('Creating workflow with data', ['data' => $request->validated()]);
+        Log::debug('Creating workflow with data', ['data' => $request->validated()]);
         $workflow = $this->workflowService->create($request->user(), $request->validated());
 
         return response()->json($workflow, 201);
@@ -55,9 +58,11 @@ class WorkflowController extends Controller
 
     public function show(Request $request, Workflow $workflow): JsonResponse
     {
+        $this->authorize('view', $workflow);
+
         $loadedWorkflow = $this->workflowService->findOrFail(
             $workflow->id,
-            $request->filled('tenant_id') ? $request->string('tenant_id')->toString() : null,
+            $request->user()->tenant_id,
         );
 
         return response()->json($loadedWorkflow);
@@ -65,6 +70,8 @@ class WorkflowController extends Controller
 
     public function update(WorkflowRequest $request, Workflow $workflow): JsonResponse
     {
+        $this->authorize('update', $workflow);
+
         $updatedWorkflow = $this->workflowService->update($workflow, $request->validated());
 
         return response()->json($updatedWorkflow);
@@ -72,6 +79,8 @@ class WorkflowController extends Controller
 
     public function trigger(Request $request, Workflow $workflow)
     {
+        $this->authorize('trigger', $workflow);
+
         $run = app(ExecutionService::class)
             ->startWorkflow($workflow->id, $request->input('input', []));
 

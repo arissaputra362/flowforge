@@ -2,7 +2,10 @@
 
 namespace App\Providers;
 
+use App\Models\Workflow;
+use App\Policies\WorkflowPolicy;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Gate;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -19,6 +22,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        Gate::policy(Workflow::class, WorkflowPolicy::class);
     }
 }

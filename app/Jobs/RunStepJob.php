@@ -17,7 +17,10 @@ class RunStepJob implements ShouldQueue
 
     public string $stepRunId;
     public int $tries = 3;
-    public int $timeout = 300; // 5 menit
+    public int $timeout = 300; // 5 minutes - hard limit for job execution
+    // Note: Individual steps may have their own timeout (e.g., HTTP timeout)
+    // configured via step definition. The job timeout ensures we don't
+    // have zombie jobs running forever.
 
     public function __construct(string $stepRunId)
     {

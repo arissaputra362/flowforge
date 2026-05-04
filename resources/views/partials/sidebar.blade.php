@@ -13,25 +13,6 @@
                 class="text-xl font-extrabold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">FlowForge</span>
         </div>
 
-        {{-- Tenant Switcher --}}
-        <div class="mt-8">
-            <button
-                class="w-full flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all group">
-                <div class="flex items-center gap-3 text-left">
-                    <div
-                        class="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-xs">
-                        AC</div>
-                    <div>
-                        <p class="text-xs font-bold text-white leading-tight">Acme Corporation</p>
-                        <p class="text-[10px] text-slate-500 font-medium">Pro Plan</p>
-                    </div>
-                </div>
-                <svg class="w-4 h-4 text-slate-500 group-hover:text-slate-300 transition-colors" fill="none"
-                    stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-            </button>
-        </div>
     </div>
 
     <nav class="flex-1 px-4 py-4 space-y-8 overflow-y-auto custom-scrollbar">

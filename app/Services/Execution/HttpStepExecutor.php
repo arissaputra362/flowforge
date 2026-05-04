@@ -8,19 +8,6 @@ class HttpStepExecutor
 {
     public static function execute(array $stepDefinition, array $input = []): array
     {
-    //     $url = $stepDefinition['url'] ?? null;
-
-    //     if (! $url) {
-    //         throw new \InvalidArgumentException('HTTP step missing url');
-    //     }
-
-    //     $response = Http::post($url, $input);
-
-    //     return [
-    //         'status' => $response->status(),
-    //         'body' => $response->json() ?? $response->body(),
-    //     ];
-
         $config = $stepDefinition['config'] ?? [];
 
         $url = $config['url'] ?? null;
@@ -36,7 +23,13 @@ class HttpStepExecutor
 
         $method = strtolower($config['method'] ?? 'get');
 
-        $response = Http::{$method}($url, $input);
+        // Apply step-level timeout (default: 300 seconds)
+        $timeout = $stepDefinition['timeout'] ?? 300;
+
+        $httpRequest = Http::{$method}($url, $input);
+
+        // Apply timeout to the request
+        $response = $httpRequest->timeout($timeout);
 
         // Throw jika HTTP error (4xx/5xx)
         if ($response->failed()) {

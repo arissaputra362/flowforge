@@ -174,6 +174,14 @@ class DagParser
                 ]);
             }
 
+            // Validate timeout if present
+            $timeout = $step['timeout'] ?? null;
+            if ($timeout !== null && (! is_int($timeout) || $timeout <= 0)) {
+                throw ValidationException::withMessages([
+                    "definition.steps.$index.timeout" => 'Timeout must be a positive integer (seconds).',
+                ]);
+            }
+
             $normalizedSteps[$stepId] = [
                 'id' => $stepId,
                 'type' => $stepType,
