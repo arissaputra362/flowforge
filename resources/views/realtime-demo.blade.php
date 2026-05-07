@@ -29,7 +29,7 @@
         };
 
         if (!window.Echo) {
-            pushEvent('Echo not configured', { hint: 'Set VITE_PUSHER_APP_KEY and rebuild assets' });
+            pushEvent('Echo not configured', { hint: 'Set VITE_REVERB_APP_KEY and rebuild assets' });
         } else {
             window.Echo.channel(`workflow.${runId}`)
                 .listen('WorkflowStarted', (e) => pushEvent('WorkflowStarted', e))

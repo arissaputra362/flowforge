@@ -108,6 +108,7 @@ services:
     command: sh -c "npm ci && npm run build"
     volumes:
       - .:/var/www/html
+    environment: *app-env
     profiles:
       - tools
 

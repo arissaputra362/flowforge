@@ -502,7 +502,7 @@
         // Reverb config dari VITE env
         const REVERB_KEY = "{{ env('VITE_REVERB_APP_KEY', 'local') }}";
         const REVERB_HOST = "{{ env('VITE_REVERB_HOST', 'localhost') }}";
-        const REVERB_PORT = {{ env('VITE_REVERB_PORT', 8081) }};
+        const REVERB_PORT = {{ env('VITE_REVERB_PORT', 8082) }};
         const REVERB_SCHEME = "{{ env('VITE_REVERB_SCHEME', 'http') }}";
 
         // ═══════════════════════════════════════════════════════
@@ -618,7 +618,7 @@
                 wsPort: REVERB_PORT,
                 wssPort: REVERB_PORT,
                 forceTLS: REVERB_SCHEME === 'https',
-                enabledTransports: ['ws', 'wss'],
+                enabledTransports: [REVERB_SCHEME === 'https' ? 'wss' : 'ws'],
                 disableStats: true,
                 cluster: 'mt1', // wajib ada meski tidak dipakai Reverb
             });
